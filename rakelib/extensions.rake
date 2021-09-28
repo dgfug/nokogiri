@@ -5,6 +5,8 @@ CrossRuby = Struct.new(:version, :host) do
   WINDOWS_PLATFORM_REGEX = /mingw|mswin/
   MINGW32_PLATFORM_REGEX = /mingw32/
   LINUX_PLATFORM_REGEX = /linux/
+  X86_LINUX_PLATFORM_REGEX = /x86.*linux/
+  ARM_LINUX_PLATFORM_REGEX = /aarch.*linux/
   DARWIN_PLATFORM_REGEX = /darwin/
 
   def windows?
@@ -46,6 +48,8 @@ CrossRuby = Struct.new(:version, :host) do
         "x86_64-linux"
       when /\Ai[3-6]86.*linux/
         "x86-linux"
+      when /\Aaarch64-linux/
+        "aarch64-linux"
       when /\Ax86_64-darwin/
         "x86_64-darwin"
       when /\Aarm64-darwin/
@@ -65,6 +69,8 @@ CrossRuby = Struct.new(:version, :host) do
         "x86_64-redhat-linux-"
       when "x86-linux"
         "i686-redhat-linux-"
+      when /a.*64.*linux/
+        "aarch64-linux-gnu-"
       when /x86_64.*darwin/
         "x86_64-apple-darwin-"
       when /a.*64.*darwin/
@@ -84,6 +90,8 @@ CrossRuby = Struct.new(:version, :host) do
       "elf64-x86-64"
     when "x86-linux"
       "elf32-i386"
+    when "aarch64-linux"
+      "elf64-littleaarch64"
     when "x86_64-darwin"
       "Mach-O 64-bit x86-64" # hmm
     when "arm64-darwin"
@@ -123,7 +131,7 @@ CrossRuby = Struct.new(:version, :host) do
         "advapi32.dll",
         libruby_dll,
       ]
-    when LINUX_PLATFORM_REGEX
+    when X86_LINUX_PLATFORM_REGEX
       [
         "libm.so.6",
         *(case
@@ -132,6 +140,16 @@ CrossRuby = Struct.new(:version, :host) do
         end),
         "libc.so.6",
         "libdl.so.2", # on old dists only - now in libc
+      ]
+    when ARM_LINUX_PLATFORM_REGEX
+      [
+        "libm.so.6",
+        *(case
+        when ver < "2.6.0"
+          "libpthread.so.0"
+        end),
+        "libc.so.6",
+        "ld-linux-aarch64.so.1",
       ]
     when DARWIN_PLATFORM_REGEX
       [
@@ -146,8 +164,10 @@ CrossRuby = Struct.new(:version, :host) do
 
   def dll_ref_versions
     case platform
-    when LINUX_PLATFORM_REGEX
+    when X86_LINUX_PLATFORM_REGEX
       { "GLIBC" => "2.17" }
+    when ARM_LINUX_PLATFORM_REGEX
+      { "GLIBC" => "2.29" }
     else
       raise "CrossRuby.dll_ref_versions: unmatched platform: #{platform}"
     end
