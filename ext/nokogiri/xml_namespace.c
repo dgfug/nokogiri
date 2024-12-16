@@ -25,13 +25,14 @@
 VALUE cNokogiriXmlNamespace ;
 
 static void
-dealloc_namespace(xmlNsPtr ns)
+_xml_namespace_dealloc(void *ptr)
 {
   /*
    * this deallocator is only used for namespace nodes that are part of an xpath
    * node set. see noko_xml_namespace_wrap().
    */
-  NOKOGIRI_DEBUG_START(ns) ;
+  xmlNsPtr ns = ptr;
+
   if (ns->href) {
     xmlFree(DISCARD_CONST_QUAL_XMLCHAR(ns->href));
   }
@@ -39,39 +40,95 @@ dealloc_namespace(xmlNsPtr ns)
     xmlFree(DISCARD_CONST_QUAL_XMLCHAR(ns->prefix));
   }
   xmlFree(ns);
-  NOKOGIRI_DEBUG_END(ns) ;
 }
 
+static void
+_xml_namespace_update_references(void *ptr)
+{
+  xmlNsPtr ns = ptr;
+  if (ns->_private) {
+    ns->_private = (void *)rb_gc_location((VALUE)ns->_private);
+  }
+}
+
+static const rb_data_type_t xml_ns_type_with_free = {
+  .wrap_struct_name = "xmlNs (with free)",
+  .function = {
+    .dfree = _xml_namespace_dealloc,
+    .dcompact = _xml_namespace_update_references,
+  },
+  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED,
+};
+
+static const rb_data_type_t xml_ns_type_without_free = {
+  .wrap_struct_name = "xmlNs (without free)",
+  .function = {
+    .dcompact = _xml_namespace_update_references,
+  },
+  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED,
+};
 
 /*
- * call-seq:
- *  prefix
+ *  :call-seq:
+ *    prefix() → String or nil
  *
- * Get the prefix for this namespace.  Returns +nil+ if there is no prefix.
+ *  Return the prefix for this Namespace, or +nil+ if there is no prefix (e.g., default namespace).
+ *
+ *  *Example*
+ *
+ *    doc = Nokogiri::XML.parse(<<~XML)
+ *      <?xml version="1.0"?>
+ *      <root xmlns="http://nokogiri.org/ns/default" xmlns:noko="http://nokogiri.org/ns/noko">
+ *        <child1 foo="abc" noko:bar="def"/>
+ *        <noko:child2 foo="qwe" noko:bar="rty"/>
+ *      </root>
+ *    XML
+ *
+ *    doc.root.elements.first.namespace.prefix
+ *    # => nil
+ *
+ *    doc.root.elements.last.namespace.prefix
+ *    # => "noko"
  */
 static VALUE
 prefix(VALUE self)
 {
   xmlNsPtr ns;
 
-  Data_Get_Struct(self, xmlNs, ns);
+  Noko_Namespace_Get_Struct(self, xmlNs, ns);
   if (!ns->prefix) { return Qnil; }
 
   return NOKOGIRI_STR_NEW2(ns->prefix);
 }
 
 /*
- * call-seq:
- *  href
+ *  :call-seq:
+ *    href() → String
  *
- * Get the href for this namespace
+ *  Returns the URI reference for this Namespace.
+ *
+ *  *Example*
+ *
+ *    doc = Nokogiri::XML.parse(<<~XML)
+ *      <?xml version="1.0"?>
+ *      <root xmlns="http://nokogiri.org/ns/default" xmlns:noko="http://nokogiri.org/ns/noko">
+ *        <child1 foo="abc" noko:bar="def"/>
+ *        <noko:child2 foo="qwe" noko:bar="rty"/>
+ *      </root>
+ *    XML
+ *
+ *    doc.root.elements.first.namespace.href
+ *    # => "http://nokogiri.org/ns/default"
+ *
+ *    doc.root.elements.last.namespace.href
+ *    # => "http://nokogiri.org/ns/noko"
  */
 static VALUE
 href(VALUE self)
 {
   xmlNsPtr ns;
 
-  Data_Get_Struct(self, xmlNs, ns);
+  Noko_Namespace_Get_Struct(self, xmlNs, ns);
   if (!ns->href) { return Qnil; }
 
   return NOKOGIRI_STR_NEW2(ns->href);
@@ -87,14 +144,18 @@ noko_xml_namespace_wrap(xmlNsPtr c_namespace, xmlDocPtr c_document)
   }
 
   if (c_document) {
-    rb_namespace = Data_Wrap_Struct(cNokogiriXmlNamespace, 0, 0, c_namespace);
+    rb_namespace = TypedData_Wrap_Struct(cNokogiriXmlNamespace,
+                                         &xml_ns_type_without_free,
+                                         c_namespace);
 
     if (DOC_RUBY_OBJECT_TEST(c_document)) {
       rb_iv_set(rb_namespace, "@document", DOC_RUBY_OBJECT(c_document));
       rb_ary_push(DOC_NODE_CACHE(c_document), rb_namespace);
     }
   } else {
-    rb_namespace = Data_Wrap_Struct(cNokogiriXmlNamespace, 0, dealloc_namespace, c_namespace);
+    rb_namespace = TypedData_Wrap_Struct(cNokogiriXmlNamespace,
+                                         &xml_ns_type_with_free,
+                                         c_namespace);
   }
 
   c_namespace->_private = (void *)rb_namespace;
@@ -109,7 +170,7 @@ noko_xml_namespace_wrap_xpath_copy(xmlNsPtr c_namespace)
 }
 
 void
-noko_init_xml_namespace()
+noko_init_xml_namespace(void)
 {
   cNokogiriXmlNamespace = rb_define_class_under(mNokogiriXml, "Namespace", rb_cObject);
 

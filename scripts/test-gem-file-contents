@@ -1,5 +1,6 @@
 #! /usr/bin/env ruby
 # frozen_string_literal: true
+
 #
 #  this script is intended to run as part of the CI test suite.
 #
@@ -15,7 +16,6 @@ require "bundler/inline"
 gemfile do
   source "https://rubygems.org"
   gem "minitest"
-  gem "minitest-reporters"
 end
 
 require "yaml"
@@ -27,9 +27,9 @@ def usage_and_exit(message = nil)
 end
 
 usage_and_exit if ARGV.include?("-h")
-usage_and_exit unless gemfile = ARGV[0]
+usage_and_exit unless (gemfile = ARGV[0])
 usage_and_exit("#{gemfile} does not exist") unless File.file?(gemfile)
-usage_and_exit("#{gemfile} is not a gem") unless /\.gem$/.match(gemfile)
+usage_and_exit("#{gemfile} is not a gem") unless /\.gem$/.match?(gemfile)
 gemfile = File.expand_path(gemfile)
 
 gemfile_contents = Dir.mktmpdir do |dir|
@@ -37,6 +37,7 @@ gemfile_contents = Dir.mktmpdir do |dir|
     unless system("tar -xf #{gemfile} data.tar.gz")
       raise "could not unpack gem #{gemfile}"
     end
+
     %x(tar -ztf data.tar.gz).split("\n")
   end
 end
@@ -46,7 +47,11 @@ gemspec = Dir.mktmpdir do |dir|
     unless system("tar -xf #{gemfile} metadata.gz")
       raise "could not unpack gem #{gemfile}"
     end
-    YAML.load(%x(gunzip -c metadata.gz))
+
+    YAML.safe_load(
+      %x(gunzip -c metadata.gz),
+      permitted_classes: [Gem::Specification, Gem::Version, Gem::Dependency, Gem::Requirement, Time, Symbol],
+    )
   end
 end
 
@@ -60,15 +65,24 @@ if ARGV.include?("-v")
 end
 
 require "minitest/autorun"
-require "minitest/reporters"
-Minitest::Reporters.use!([Minitest::Reporters::SpecReporter.new])
 
 puts "Testing '#{gemfile}' (#{gemspec.platform})"
 describe File.basename(gemfile) do
   let(:cross_rubies_path) { File.join(File.dirname(__FILE__), "..", ".cross_rubies") }
-  let(:native_ruby_versions) do
+
+  let(:platform_supported_ruby_versions) do
+    File.read(cross_rubies_path).split("\n").filter_map do |line|
+      ver, plat = line.split(":")
+      next if plat != gemspec.platform.to_s
+
+      ver.split(".").take(2).join(".") # ugh
+    end.uniq.sort
+  end
+
+  let(:all_supported_ruby_versions) do
     File.read(cross_rubies_path).split("\n").map do |line|
-      line.split(":").first.split(".").take(2).join(".") # ugh
+      ver, _ = line.split(":")
+      ver.split(".").take(2).join(".") # ugh
     end.uniq.sort
   end
 
@@ -108,10 +122,16 @@ describe File.basename(gemfile) do
 
     it "contains the port files" do
       actual_ports = gemfile_contents.grep(%r{^ports/})
-      assert_equal(1, actual_ports.grep(/libxml2-\d+\.\d+\.\d+\.tar\.gz/).length,
-                   "expected #{actual_ports} to include libxml2")
-      assert_equal(1, actual_ports.grep(/libxslt-\d+\.\d+\.\d+\.tar\.gz/).length,
-                   "expected #{actual_ports} to include libxslt")
+      assert_equal(
+        1,
+        actual_ports.grep(/libxml2-\d+\.\d+\.\d+\.tar\.[gx]z/).length,
+        "expected #{actual_ports} to include libxml2",
+      )
+      assert_equal(
+        1,
+        actual_ports.grep(/libxslt-\d+\.\d+\.\d+\.tar\.[gx]z/).length,
+        "expected #{actual_ports} to include libxslt",
+      )
       assert_equal(2, actual_ports.length)
     end
 
@@ -174,7 +194,7 @@ describe File.basename(gemfile) do
     end
 
     it "contains expected shared library files " do
-      native_ruby_versions.each do |version|
+      platform_supported_ruby_versions.each do |version|
         actual = gemfile_contents.find do |p|
           File.fnmatch?("lib/nokogiri/#{version}/nokogiri.{so,bundle}", p, File::FNM_EXTGLOB)
         end
@@ -189,7 +209,27 @@ describe File.basename(gemfile) do
       actual = gemfile_contents.find_all do |p|
         File.fnmatch?("lib/nokogiri/**/*.{so,bundle}", p, File::FNM_EXTGLOB)
       end
-      assert_equal(native_ruby_versions.length, actual.length, "did not expect extra shared library files")
+      assert_equal(
+        platform_supported_ruby_versions.length,
+        actual.length,
+        "did not expect extra shared library files",
+      )
+    end
+
+    it "sets required_ruby_version appropriately" do
+      unsupported_versions = all_supported_ruby_versions - platform_supported_ruby_versions
+      platform_supported_ruby_versions.each do |v|
+        assert(
+          gemspec.required_ruby_version.satisfied_by?(Gem::Version.new(v)),
+          "required_ruby_version='#{gemspec.required_ruby_version}' should support ruby #{v}",
+        )
+      end
+      unsupported_versions.each do |v|
+        refute(
+          gemspec.required_ruby_version.satisfied_by?(Gem::Version.new(v)),
+          "required_ruby_version='#{gemspec.required_ruby_version}' should not support ruby #{v}",
+        )
+      end
     end
   end if gemspec.platform.is_a?(Gem::Platform) && gemspec.platform.cpu
 
@@ -199,7 +239,7 @@ describe File.basename(gemfile) do
     end
 
     it "contains ext/nokogiri C files" do
-      # Note: we keep the C files because they have docstrings and Java files don't
+      # NOTE: we keep the C files because they have docstrings and Java files don't
       assert_operator(gemfile_contents.grep(%r{^ext/nokogiri/.*\.c}).length, :>, 20)
     end
 
@@ -232,20 +272,25 @@ describe File.basename(gemfile) do
     end
 
     it "contains the java jar files" do
+      assert_includes(gemfile_contents, "lib/nokogiri/nokogiri.jar")
+
       actual_jars = gemfile_contents.grep(/.*\.jar$/)
       expected_jars = [
         "isorelax",
         "jing",
+        "neko-htmlunit",
         "nekodtd",
-        "nekohtml",
-        "nokogiri",
         "serializer",
         "xalan",
         "xercesImpl",
         "xml-apis",
       ]
-      expected_jars.each do |jar|
-        assert_equal(1, actual_jars.grep(%r{/#{jar}\.jar$}).length, "expected to contain #{jar}.jar")
+      expected_jars.each do |name|
+        assert_equal(
+          1,
+          actual_jars.count { |j| File.fnmatch?("lib/nokogiri/jruby/**/#{name}-*.jar", j) },
+          "expected to contain '#{name}-*.jar'",
+        )
       end
     end
   end if gemspec.platform == Gem::Platform.new("java")

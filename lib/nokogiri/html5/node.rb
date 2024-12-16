@@ -1,4 +1,6 @@
+# coding: utf-8
 # frozen_string_literal: true
+
 #
 #  Copyright 2013-2021 Sam Ruby, Stephen Checkoway
 #
@@ -15,22 +17,28 @@
 #  limitations under the License.
 #
 
+#
+#  TODO: this whole file should go away. maybe make it a decorator?
+#
 require_relative "../xml/node"
 
 module Nokogiri
   module HTML5
-    # @since v1.12.0
-    # @note HTML5 functionality is not available when running JRuby.
+    # Since v1.12.0
+    #
+    # 💡 HTML5 functionality is not available when running JRuby.
     module Node
       def inner_html(options = {})
-        return super(options) unless document.is_a?(HTML5::Document)
-        result = options[:preserve_newline] && HTML5.prepend_newline?(self) ? String.new("\n") : String.new
+        return super unless document.is_a?(HTML5::Document)
+
+        result = options[:preserve_newline] && prepend_newline? ? +"\n" : +""
         result << children.map { |child| child.to_html(options) }.join
         result
       end
 
       def write_to(io, *options)
-        return super(io, *options) unless document.is_a?(HTML5::Document)
+        return super unless document.is_a?(HTML5::Document)
+
         options = options.first.is_a?(Hash) ? options.shift : {}
         encoding = options[:encoding] || options[0]
         if Nokogiri.jruby?
@@ -45,22 +53,23 @@ module Nokogiri
         config = XML::Node::SaveOptions.new(save_options.to_i)
         yield config if block_given?
 
+        encoding = encoding.is_a?(Encoding) ? encoding.name : encoding
+
         config_options = config.options
         if config_options & (XML::Node::SaveOptions::AS_XML | XML::Node::SaveOptions::AS_XHTML) != 0
           # Use Nokogiri's serializing code.
           native_write_to(io, encoding, indent_string, config_options)
         else
           # Serialize including the current node.
+          html = html_standard_serialize(options[:preserve_newline] || false)
           encoding ||= document.encoding || Encoding::UTF_8
-          internal_ops = {
-            preserve_newline: options[:preserve_newline] || false,
-          }
-          HTML5.serialize_node_internal(self, io, encoding, internal_ops)
+          io << html.encode(encoding, fallback: lambda { |c| "&#x#{c.ord.to_s(16)};" })
         end
       end
 
       def fragment(tags)
-        return super(tags) unless document.is_a?(HTML5::Document)
+        return super unless document.is_a?(HTML5::Document)
+
         DocumentFragment.new(document, tags, self)
       end
 
@@ -72,7 +81,8 @@ module Nokogiri
       # annoying with attribute names like xml:lang since libxml2 will
       # actually create the xml namespace if it doesn't exist already.
       def add_child_node_and_reparent_attrs(node)
-        return super(node) unless document.is_a?(HTML5::Document)
+        return super unless document.is_a?(HTML5::Document)
+
         # I'm not sure what this method is supposed to do. Reparenting
         # namespaces is handled by libxml2, including child namespaces which
         # this method wouldn't handle.

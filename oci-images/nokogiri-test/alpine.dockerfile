@@ -1,8 +1,8 @@
-FROM ruby:alpine3.12
+FROM ruby:alpine3.21
 
 # prelude
 RUN apk update
-RUN apk add bash build-base
+RUN apk add bash build-base git
 
 # valgrind
 RUN apk add valgrind
@@ -10,6 +10,7 @@ RUN apk add valgrind
 # libxml-et-al
 RUN apk add libxml2-dev libxslt-dev pkgconfig
 
+# include_file bundle-install.step
 # -*- dockerfile -*-
 
 COPY Gemfile nokogiri/

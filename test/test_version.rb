@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require "helper"
 require "rbconfig"
 require "json"
@@ -16,7 +17,7 @@ module TestVersionInfoTests
     assert_equal(Nokogiri::VERSION, Nokogiri::VERSION_INFO["nokogiri"]["version"])
 
     if jruby?
-      refute(Nokogiri::VERSION_INFO["nokogiri"].has_key?("cppflags"), "did not expect cppflags")
+      refute(Nokogiri::VERSION_INFO["nokogiri"].key?("cppflags"), "did not expect cppflags")
     else
       # cppflags/ldflags are more fully tested in scripts/test-gem-installation
       assert_kind_of(Array, Nokogiri::VERSION_INFO["nokogiri"]["cppflags"], "cppflags should be an array")
@@ -30,8 +31,15 @@ module TestVersionInfoTests
 
   def test_version_info_for_xerces_and_nekohtml
     skip_unless_jruby("xerces/nekohtml is only used for JRuby")
-    assert_equal(Nokogiri::XERCES_VERSION, version_info["other_libraries"]["xerces"])
-    assert_equal(Nokogiri::NEKO_VERSION, version_info["other_libraries"]["nekohtml"])
+    assert_equal(Nokogiri::XERCES_VERSION, version_info["other_libraries"]["xerces:xercesImpl"])
+    assert_equal(Nokogiri::NEKO_VERSION, version_info["other_libraries"]["net.sourceforge.htmlunit:neko-htmlunit"])
+    refute_nil(version_info["other_libraries"]["isorelax:isorelax"])
+    refute_nil(version_info["other_libraries"]["nu.validator:jing"])
+    refute_nil(version_info["other_libraries"]["xalan:serializer"])
+    refute_nil(version_info["other_libraries"]["xalan:xalan"])
+    refute_nil(version_info["other_libraries"]["xerces:xercesImpl"])
+    refute_nil(version_info["other_libraries"]["xml-apis:xml-apis"])
+    assert_empty(Nokogiri.libxml2_patches)
   end
 
   def test_version_info_for_libxml
@@ -40,18 +48,20 @@ module TestVersionInfoTests
     if Nokogiri::VersionInfo.instance.libxml2_using_packaged?
       assert_equal("packaged", version_info["libxml"]["source"])
       assert(version_info["libxml"]["patches"])
+      assert_equal(Nokogiri.libxml2_patches, version_info["libxml"]["patches"])
       assert_equal(Nokogiri::VersionInfo.instance.libxml2_precompiled?, version_info["libxml"]["precompiled"])
     end
     if Nokogiri::VersionInfo.instance.libxml2_using_system?
       assert_equal("system", version_info["libxml"]["source"])
       refute(version_info["libxml"].key?("precompiled"))
       refute(version_info["libxml"].key?("patches"))
+      assert_empty(Nokogiri.libxml2_patches)
     end
 
     assert_equal(Nokogiri::LIBXML_COMPILED_VERSION, version_info["libxml"]["compiled"])
     assert_match(VERSION_MATCH, version_info["libxml"]["compiled"])
 
-    assert_match VERSION_MATCH, version_info["libxml"]["loaded"]
+    assert_match(VERSION_MATCH, version_info["libxml"]["loaded"])
     Nokogiri::LIBXML_LOADED_VERSION =~ /(\d)(\d{2})(\d{2})/
     major = Regexp.last_match(1).to_i
     minor = Regexp.last_match(2).to_i

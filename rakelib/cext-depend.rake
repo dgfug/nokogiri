@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require "set"
 
 namespace "cext" do
@@ -13,7 +14,7 @@ namespace "cext" do
         sh "makedepend -f depend -Y -I. *.c 2> /dev/null"
         dep = File.read("depend")
         dep.gsub!(%r{ \./}, " $(srcdir)/")
-        File.open("depend", "w") { |f| f.write(dep) }
+        File.write("depend", dep)
       end
     end
   end

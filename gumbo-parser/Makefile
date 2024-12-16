@@ -13,8 +13,35 @@ LDFLAGS := -pthread
 
 all: check
 
+oss-fuzz:
+	./fuzzer/build-ossfuzz.sh
+
+fuzzers: fuzzer-normal fuzzer-asan fuzzer-ubsan fuzzer-msan
+
+fuzzer-normal:
+	./fuzzer/build.sh
+
+fuzzer-asan:
+	SANITIZER=asan ./fuzzer/build.sh
+
+fuzzer-ubsan:
+	SANITIZER=ubsan ./fuzzer/build.sh
+
+fuzzer-msan:
+	SANITIZER=msan ./fuzzer/build.sh
+
+# don't try to regenerate ragel or gperf files in CI, that should be a development-only action and
+# the generated files should be committed to SCM
+ifneq ($(CI),true)
+src/foreign_attrs.c: src/foreign_attrs.gperf
+	gperf -m100 -n $< | ./gperf-filter.sed > $@
+
+src/%.c: src/%.gperf
+	gperf -m100 $< | ./gperf-filter.sed > $@
+
 src/%.c: src/%.rl
 	ragel -F1 -o $@ $<
+endif
 
 build/src:
 	mkdir -p $@
@@ -71,6 +98,7 @@ coverage:
 
 clean:
 	$(RM) -r build
+	$(RM) -r fuzzer/build fuzzer/src-* fuzzer/gumbo_corpus
 
 build/src/flags: | build/src
 	@echo 'old_CC := $(CC)' > $@

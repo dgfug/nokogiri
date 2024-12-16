@@ -1,5 +1,10 @@
 #include <nokogiri.h>
 
+static const rb_data_type_t html_elem_desc_type = {
+  .wrap_struct_name = "htmlElemDesc",
+  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED,
+};
+
 VALUE cNokogiriHtml4ElementDescription ;
 
 /*
@@ -15,7 +20,7 @@ required_attributes(VALUE self)
   VALUE list;
   int i;
 
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   list = rb_ary_new();
 
@@ -41,7 +46,7 @@ deprecated_attributes(VALUE self)
   VALUE list;
   int i;
 
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   list = rb_ary_new();
 
@@ -67,7 +72,7 @@ optional_attributes(VALUE self)
   VALUE list;
   int i;
 
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   list = rb_ary_new();
 
@@ -90,7 +95,7 @@ static VALUE
 default_sub_element(VALUE self)
 {
   const htmlElemDesc *description;
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   if (description->defaultsubelt) {
     return NOKOGIRI_STR_NEW2(description->defaultsubelt);
@@ -112,7 +117,7 @@ sub_elements(VALUE self)
   VALUE list;
   int i;
 
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   list = rb_ary_new();
 
@@ -135,7 +140,7 @@ static VALUE
 description(VALUE self)
 {
   const htmlElemDesc *description;
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   return NOKOGIRI_STR_NEW2(description->desc);
 }
@@ -150,7 +155,7 @@ static VALUE
 inline_eh(VALUE self)
 {
   const htmlElemDesc *description;
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   if (description->isinline) { return Qtrue; }
   return Qfalse;
@@ -166,7 +171,7 @@ static VALUE
 deprecated_eh(VALUE self)
 {
   const htmlElemDesc *description;
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   if (description->depr) { return Qtrue; }
   return Qfalse;
@@ -182,7 +187,7 @@ static VALUE
 empty_eh(VALUE self)
 {
   const htmlElemDesc *description;
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   if (description->empty) { return Qtrue; }
   return Qfalse;
@@ -198,7 +203,7 @@ static VALUE
 save_end_tag_eh(VALUE self)
 {
   const htmlElemDesc *description;
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   if (description->saveEndTag) { return Qtrue; }
   return Qfalse;
@@ -214,7 +219,7 @@ static VALUE
 implied_end_tag_eh(VALUE self)
 {
   const htmlElemDesc *description;
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   if (description->endTag) { return Qtrue; }
   return Qfalse;
@@ -230,7 +235,7 @@ static VALUE
 implied_start_tag_eh(VALUE self)
 {
   const htmlElemDesc *description;
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   if (description->startTag) { return Qtrue; }
   return Qfalse;
@@ -240,13 +245,13 @@ implied_start_tag_eh(VALUE self)
  * call-seq:
  *  name
  *
- * Get the tag name for this ElemementDescription
+ * Get the tag name for this ElementDescription
  */
 static VALUE
 name(VALUE self)
 {
   const htmlElemDesc *description;
-  Data_Get_Struct(self, htmlElemDesc, description);
+  TypedData_Get_Struct(self, htmlElemDesc, &html_elem_desc_type, description);
 
   if (NULL == description->name) { return Qnil; }
   return NOKOGIRI_STR_NEW2(description->name);
@@ -256,7 +261,7 @@ name(VALUE self)
  * call-seq:
  *  [](tag_name)
  *
- * Get ElemementDescription for +tag_name+
+ * Get ElementDescription for +tag_name+
  */
 static VALUE
 get_description(VALUE klass, VALUE tag_name)
@@ -266,11 +271,11 @@ get_description(VALUE klass, VALUE tag_name)
                                     );
 
   if (NULL == description) { return Qnil; }
-  return Data_Wrap_Struct(klass, 0, 0, DISCARD_CONST_QUAL(void *, description));
+  return TypedData_Wrap_Struct(klass, &html_elem_desc_type, DISCARD_CONST_QUAL(void *, description));
 }
 
 void
-noko_init_html_element_description()
+noko_init_html_element_description(void)
 {
   cNokogiriHtml4ElementDescription = rb_define_class_under(mNokogiriHtml4, "ElementDescription", rb_cObject);
 

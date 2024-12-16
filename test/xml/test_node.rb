@@ -1,7 +1,8 @@
 # frozen_string_literal: true
+
 require "helper"
 
-require 'stringio'
+require "stringio"
 
 module Nokogiri
   module XML
@@ -11,14 +12,19 @@ module Nokogiri
 
         def test_first_element_child
           node = xml.root.first_element_child
-          assert_equal('employee', node.name)
-          assert(node.element?, 'node is an element')
+          assert_equal("employee", node.name)
+          assert_predicate(node, :element?, "node is an element")
+        end
+
+        def test_first_element_child_with_no_match
+          doc = Nokogiri::XML::Document.parse("<root>asdf</root>")
+          assert_nil(doc.root.first_element_child)
         end
 
         def test_element_children
           nodes = xml.root.element_children
           assert_equal(xml.root.first_element_child, nodes.first)
-          assert(nodes.all?(&:element?), 'all nodes are elements')
+          assert(nodes.all?(&:element?), "all nodes are elements")
         end
 
         def test_last_element_child
@@ -26,14 +32,18 @@ module Nokogiri
           assert_equal(nodes.last, xml.root.element_children.last)
         end
 
-        def test_bad_xpath
-          bad_xpath = '//foo['
+        def test_last_element_child_with_no_match
+          doc = Nokogiri::XML::Document.parse("<root>asdf</root>")
+          assert_nil(doc.root.last_element_child)
+        end
 
-          begin
+        def test_bad_xpath
+          bad_xpath = "//foo["
+
+          e = assert_raises(Nokogiri::XML::XPath::SyntaxError) do
             xml.xpath(bad_xpath)
-          rescue Nokogiri::XML::XPath::SyntaxError => e
-            assert_match(bad_xpath, e.to_s)
           end
+          assert_match(bad_xpath, e.to_s)
         end
 
         def test_namespace_type_error
@@ -44,40 +54,40 @@ module Nokogiri
 
         def test_remove_namespace
           xml = Nokogiri::XML('<r xmlns="v"><s /></r>')
-          tag = xml.at('s')
+          tag = xml.at("s")
           assert(tag.namespace)
           tag.namespace = nil
           assert_nil(tag.namespace)
         end
 
         def test_parse_needs_doc
-          list = xml.root.parse('fooooooo <hello />')
-          assert_equal(1, list.css('hello').length)
+          list = xml.root.parse("fooooooo <hello />")
+          assert_equal(1, list.css("hello").length)
         end
 
         def test_parse
-          list = xml.root.parse('fooooooo <hello />')
+          list = xml.root.parse("fooooooo <hello />")
           assert_equal(2, list.length)
         end
 
         def test_parse_with_block
           called = false
-          list = xml.root.parse('<hello />') do |cfg|
+          list = xml.root.parse("<hello />") do |cfg|
             called = true
             assert_instance_of(Nokogiri::XML::ParseOptions, cfg)
           end
-          assert(called, 'config block called')
+          assert(called, "config block called")
           assert_equal(1, list.length)
         end
 
         def test_parse_with_io
-          list = xml.root.parse(StringIO.new('<hello />'))
+          list = xml.root.parse(StringIO.new("<hello />"))
           assert_equal(1, list.length)
-          assert_equal('hello', list.first.name)
+          assert_equal("hello", list.first.name)
         end
 
         def test_parse_with_empty_string
-          list = xml.root.parse('')
+          list = xml.root.parse("")
           assert_equal(0, list.length)
         end
 
@@ -91,76 +101,110 @@ module Nokogiri
         end
 
         def test_node_context_parsing_of_malformed_html_fragment
-          doc = HTML.parse("<html><body><div></div></body></html>")
+          doc = HTML4.parse("<html><body><div></div></body></html>")
           context_node = doc.at_css("div")
           nodeset = context_node.parse("<div </div>")
 
-          assert_equal(1, doc.errors.length)
-          assert_equal(1, nodeset.length)
-          assert_equal("<div></div>", nodeset.to_s)
+          if Nokogiri.uses_libxml?(">= 2.14.0")
+            assert_empty(doc.errors)
+            assert_pattern do
+              nodeset => [
+                { name: "div", attributes: [{name: "<", value: ""}, { name: "div", value: ""}] },
+              ]
+            end
+          else
+            assert_equal(1, doc.errors.length)
+            assert_equal(1, nodeset.length)
+            assert_equal("<div></div>", nodeset.to_s)
+          end
+
+          assert_instance_of(Nokogiri::HTML4::Document, nodeset.document)
+          assert_instance_of(Nokogiri::HTML4::Document, nodeset.first.document)
         end
 
         def test_node_context_parsing_of_malformed_html_fragment_with_recover_is_corrected
-          doc = HTML.parse("<html><body><div></div></body></html>")
+          doc = HTML4.parse("<html><body><div></div></body></html>")
           context_node = doc.at_css("div")
-          nodeset = context_node.parse("<div </div>") do |options|
-            options.recover
-          end
+          nodeset = context_node.parse("<div </div>", &:recover)
 
-          assert_equal(1, doc.errors.length)
-          assert_equal(1, nodeset.length)
-          assert_equal("<div></div>", nodeset.to_s)
+          if Nokogiri.uses_libxml?(">= 2.14.0")
+            assert_empty(doc.errors)
+            assert_pattern do
+              nodeset => [
+                { name: "div", attributes: [{name: "<", value: ""}, { name: "div", value: ""}] },
+              ]
+            end
+          else
+            assert_equal(1, doc.errors.length)
+            assert_equal(1, nodeset.length)
+            assert_equal("<div></div>", nodeset.to_s)
+          end
+          assert_instance_of(Nokogiri::HTML4::Document, nodeset.document)
+          assert_instance_of(Nokogiri::HTML4::Document, nodeset.first.document)
         end
 
         def test_node_context_parsing_of_malformed_html_fragment_without_recover_is_not_corrected
-          doc = HTML.parse("<html><body><div></div></body></html>")
+          skip("libxml2 2.14.0 no longer raises this error") if Nokogiri.uses_libxml?(">= 2.14.0")
+
+          doc = HTML4.parse("<html><body><div></div></body></html>")
           context_node = doc.at_css("div")
           assert_raises(Nokogiri::XML::SyntaxError) do
-            context_node.parse("<div </div>") do |options|
-              options.strict
-            end
+            context_node.parse("<div </div>", &:strict)
           end
+        end
+
+        def test_node_context_parsing_of_malformed_xml_fragment_uses_the_right_class_to_recover
+          doc = XML.parse("<root><body><div></div></body></root>")
+          context_node = doc.at_css("div")
+          nodeset = context_node.parse("<div </div") # causes an error and recovers
+          assert_instance_of(Nokogiri::XML::Document, nodeset.document)
+          assert_instance_of(Nokogiri::XML::Document, nodeset.first.document)
         end
 
         def test_parse_error_list
           error_count = xml.errors.length
-          xml.root.parse('<hello>')
-          assert(error_count < xml.errors.length, "errors should have increased")
+          xml.root.parse("<hello>")
+          assert_operator(error_count, :<, xml.errors.length, "errors should have increased")
         end
 
         def test_parse_error_on_fragment_with_empty_document
           doc = Document.new
-          fragment = DocumentFragment.new(doc, '<foo><bar/></foo>')
-          node = fragment % 'bar'
-          node.parse('<baz><</baz>')
+          fragment = DocumentFragment.new(doc, "<foo><bar/></foo>")
+          node = fragment.at_css("bar")
+
+          assert_empty(doc.errors)
+
+          node.parse("<baz><</baz>")
+
+          refute_empty(doc.errors)
         end
 
         def test_parse_with_unparented_text_context_node
           doc = XML::Document.new
           elem = XML::Text.new("foo", doc)
           x = elem.parse("<bar/>") # should not raise an exception
-          assert_equal(x.first.name, "bar")
+          assert_equal("bar", x.first.name)
         end
 
         def test_parse_with_unparented_html_text_context_node
-          doc = HTML::Document.new
+          doc = Nokogiri::HTML4::Document.new
           elem = XML::Text.new("div", doc)
           x = elem.parse("<div/>") # should not raise an exception
-          assert_equal(x.first.name, "div")
+          assert_equal("div", x.first.name)
         end
 
         def test_parse_with_unparented_fragment_text_context_node
           doc = XML::DocumentFragment.parse("<div><span>foo</span></div>")
           elem = doc.at_css("span")
           x = elem.parse("<span/>") # should not raise an exception
-          assert_equal(x.first.name, "span")
+          assert_equal("span", x.first.name)
         end
 
         def test_parse_with_unparented_html_fragment_text_context_node
-          doc = HTML::DocumentFragment.parse("<div><span>foo</span></div>")
+          doc = Nokogiri::HTML4::DocumentFragment.parse("<div><span>foo</span></div>")
           elem = doc.at_css("span")
           x = elem.parse("<span/>") # should not raise an exception
-          assert_equal(x.first.name, "span")
+          assert_equal("span", x.first.name)
         end
 
         def test_dup_is_deep_copy_by_default
@@ -186,38 +230,86 @@ module Nokogiri
           assert_equal(0, node.children.length)
         end
 
-        def test_dup_to_another_document
-          skip_unless_libxml2("Node.dup with new_parent arg is only implemented on CRuby")
-          doc1 = HTML::Document.parse("<root><div><p>hello</p></div></root>")
-          doc2 = HTML::Document.parse("<div></div>")
+        def test_dup_same_parent_document_is_default
+          doc = XML::Document.parse("<root><div><p>hello</p></div></root>")
+          div = doc.at_css("div")
+          node = div.dup
+          assert_same(div.document, node.document)
+        end
+
+        def test_dup_different_parent_document
+          doc1 = XML::Document.parse("<root><div><p>hello</p></div></root>")
+          doc2 = XML::Document.parse("<div></div>")
+
+          x = Module.new { def awesome!; end }
+          doc2.decorators(XML::Node) << x
+          doc2.decorate!
 
           div = doc1.at_css("div")
-          duplicate_div = div.dup(1, doc2)
+          copy = div.dup(1, doc2)
 
-          assert_not_nil(doc1.at_css("div"))
-          assert_equal(doc2, duplicate_div.document)
-          assert_equal(1, duplicate_div.children.length)
-          assert_equal("<p>hello</p>", duplicate_div.children.first.to_html)
+          assert_same(doc2, copy.document)
+          assert_equal(1, copy.children.length, "expected a deep copy")
+          assert_respond_to(copy, :awesome!, "expected decorators to be copied")
+
+          copy = div.dup(0, doc2)
+
+          assert_equal(0, copy.children.length, "expected a shallow copy")
         end
 
         def test_subclass_dup
           subclass = Class.new(Nokogiri::XML::Node)
-          node = subclass.new('foo', xml).dup
+          node = subclass.new("foo", xml).dup
           assert_instance_of(subclass, node)
         end
 
-        def test_gt_string_arg
-          node = xml.at('employee')
-          nodes = (node > 'name')
-          assert_equal(1, nodes.length)
-          assert_equal(node, nodes.first.parent)
+        def test_search_direct_children_of_node
+          xml = <<~XML
+            <root>
+              <div class="section header" id="1">
+                <div class="subsection header">sub 1</div>
+                <div class="subsection header">sub 2</div>
+              </div>
+              <div class="section header" id="2">
+                <div class="subsection header">sub 3</div>
+                <div class="subsection header">sub 4</div>
+              </div>
+            </root>
+          XML
+          node = Nokogiri::XML::Document.parse(xml).root
+          result = (node > "div.header")
+          assert_equal(2, result.length)
+          assert_equal(["1", "2"], result.map { |n| n["id"] })
+
+          assert_empty(node > ".no-such-match")
+        end
+
+        def test_search_direct_children_of_node_provides_root_namespaces_implicitly
+          xml = <<~XML
+            <root xmlns:foo="http://nokogiri.org/ns/foo">
+              <foo:div class="section header" id="1">
+                <foo:div class="subsection header">sub 1</foo:div>
+                <foo:div class="subsection header">sub 2</foo:div>
+              </foo:div>
+              <foo:div class="section header" id="2">
+                <foo:div class="subsection header">sub 3</foo:div>
+                <foo:div class="subsection header">sub 4</foo:div>
+              </foo:div>
+            </root>
+          XML
+          node = Nokogiri::XML::Document.parse(xml).root
+          result = (node > "foo|div.header")
+          assert_equal(2, result.length)
+          assert_equal(["1", "2"], result.map { |n| n["id"] })
+
+          assert_empty(node > ".no-such-match")
         end
 
         def test_next_element_when_next_sibling_is_element_should_return_next_sibling
           doc = Nokogiri::XML("<root><foo /><quux /></root>")
           node         = doc.at_css("foo")
           next_element = node.next_element
-          assert(next_element.element?)
+          assert_predicate(next_element, :element?)
           assert_equal(doc.at_css("quux"), next_element)
         end
 
@@ -230,7 +322,7 @@ module Nokogiri
           doc = Nokogiri::XML("<root><foo />bar<quux /></root>")
           node         = doc.at_css("foo")
           next_element = node.next_element
-          assert(next_element.element?)
+          assert_predicate(next_element, :element?)
           assert_equal(doc.at_css("quux"), next_element)
         end
 
@@ -245,7 +337,7 @@ module Nokogiri
           doc = Nokogiri::XML("<root><foo /><quux /></root>")
           node             = doc.at_css("quux")
           previous_element = node.previous_element
-          assert(previous_element.element?)
+          assert_predicate(previous_element, :element?)
           assert_equal(doc.at_css("foo"), previous_element)
         end
 
@@ -258,7 +350,7 @@ module Nokogiri
           doc = Nokogiri::XML("<root><foo />bar<quux /></root>")
           node             = doc.at_css("quux")
           previous_element = node.previous_element
-          assert(previous_element.element?)
+          assert_predicate(previous_element, :element?)
           assert_equal(doc.at_css("foo"), previous_element)
         end
 
@@ -270,11 +362,11 @@ module Nokogiri
         end
 
         def test_element?
-          assert(xml.root.element?, 'is an element')
+          assert_predicate(xml.root, :element?, "is an element")
         end
 
         def test_slash_search
-          assert_equal('EMP0001', (xml / :staff / :employee / :employeeId).first.text)
+          assert_equal("EMP0001", (xml / :staff / :employee / :employeeId).first.text)
         end
 
         def test_append_with_document
@@ -286,16 +378,16 @@ module Nokogiri
         def test_append_with_attr
           r = Nokogiri.XML('<r a="1" />').root
           assert_raises(ArgumentError) do
-            r << r.at_xpath('@a')
+            r << r.at_xpath("@a")
           end
         end
 
         def test_inspect_ns
-          xml = Nokogiri::XML(<<~eoxml) { |c| c.noblanks }
+          xml = Nokogiri::XML(<<~XML, &:noblanks)
             <root xmlns="http://tenderlovemaking.com/" xmlns:foo="bar">
               <awesome/>
             </root>
-          eoxml
+          XML
           ins = xml.inspect
 
           xml.traverse do |node|
@@ -315,60 +407,60 @@ module Nokogiri
         end
 
         def test_namespace_definitions_when_some_exist
-          xml = Nokogiri::XML(<<~eoxml)
+          xml = Nokogiri::XML(<<~XML)
             <root xmlns="http://tenderlovemaking.com/" xmlns:foo="bar">
               <awesome/>
             </root>
-          eoxml
+          XML
           namespace_definitions = xml.root.namespace_definitions
           assert_equal(2, namespace_definitions.length)
         end
 
         def test_namespace_definitions_when_no_exist
-          xml = Nokogiri::XML(<<~eoxml)
+          xml = Nokogiri::XML(<<~XML)
             <root xmlns="http://tenderlovemaking.com/" xmlns:foo="bar">
               <awesome/>
             </root>
-          eoxml
-          namespace_definitions = xml.at_xpath('//xmlns:awesome').namespace_definitions
+          XML
+          namespace_definitions = xml.at_xpath("//xmlns:awesome").namespace_definitions
           assert_equal(0, namespace_definitions.length)
         end
 
         def test_default_namespace_goes_to_children
-          fruits = Nokogiri::XML(<<~eoxml)
+          fruits = Nokogiri::XML(<<~XML)
             <Fruit xmlns='www.fruits.org'>
             </Fruit>
-          eoxml
-          apple = Nokogiri::XML::Node.new('Apple', fruits)
-          orange = Nokogiri::XML::Node.new('Orange', fruits)
+          XML
+          apple = Nokogiri::XML::Node.new("Apple", fruits)
+          orange = Nokogiri::XML::Node.new("Orange", fruits)
           apple << orange
           fruits.root << apple
-          assert(fruits.at('//fruit:Orange', { 'fruit' => 'www.fruits.org' }))
-          assert(fruits.at('//fruit:Apple', { 'fruit' => 'www.fruits.org' }))
+          assert(fruits.at("//fruit:Orange", { "fruit" => "www.fruits.org" }))
+          assert(fruits.at("//fruit:Apple", { "fruit" => "www.fruits.org" }))
         end
 
         def test_parent_namespace_is_not_inherited
-          fruits = Nokogiri::XML(<<-eoxml)
+          fruits = Nokogiri::XML(<<-XML)
             <fruit xmlns:fruit="http://fruits.org">
               <fruit:apple />
             </fruit>
-          eoxml
+          XML
 
-          apple = fruits.at_xpath('//fruit:apple', {"fruit" => "http://fruits.org"})
+          apple = fruits.at_xpath("//fruit:apple", { "fruit" => "http://fruits.org" })
           assert(apple)
 
-          orange = Nokogiri::XML::Node.new('orange', fruits)
+          orange = Nokogiri::XML::Node.new("orange", fruits)
           apple.add_child(orange)
 
-          assert_equal(orange, fruits.at_xpath('//orange'))
+          assert_equal(orange, fruits.at_xpath("//orange"))
         end
 
         def test_description
-          assert_nil(xml.at('employee').description)
+          assert_nil(xml.at("employee").description)
         end
 
         def test_spaceship
-          nodes = xml.xpath('//employee')
+          nodes = xml.xpath("//employee")
           assert_equal(-1, (nodes.first <=> nodes.last))
           list = [nodes.first, nodes.last].sort
           assert_equal(nodes.first, list.first)
@@ -376,12 +468,12 @@ module Nokogiri
         end
 
         def test_incorrect_spaceship
-          nodes = xml.xpath('//employee')
-          assert_nil(nodes.first <=> 'asdf')
+          nodes = xml.xpath("//employee")
+          assert_nil(nodes.first <=> "asdf")
         end
 
         def test_document_compare
-          nodes = xml.xpath('//employee')
+          nodes = xml.xpath("//employee")
           result = (nodes.first <=> xml)
 
           # Note that this behavior was changed in libxml@a005199 starting in v2.9.5.
@@ -397,36 +489,82 @@ module Nokogiri
         end
 
         def test_different_document_compare
-          nodes = xml.xpath('//employee')
-          doc = Nokogiri::XML('<a><b/></a>')
-          b = doc.at('b')
+          nodes = xml.xpath("//employee")
+          doc = Nokogiri::XML("<a><b/></a>")
+          b = doc.at("b")
           assert_nil(nodes.first <=> b)
         end
 
         def test_duplicate_node_removes_namespace
-          fruits = Nokogiri::XML(<<~eoxml)
+          fruits = Nokogiri::XML(<<~XML)
             <Fruit xmlns='www.fruits.org'>
             <Apple></Apple>
             </Fruit>
-          eoxml
-          apple = fruits.root.xpath('fruit:Apple', { 'fruit' => 'www.fruits.org' })[0]
+          XML
+          apple = fruits.root.xpath("fruit:Apple", { "fruit" => "www.fruits.org" })[0]
           new_apple = apple.dup
           fruits.root << new_apple
-          assert_equal(2, fruits.xpath('//xmlns:Apple').length)
-          assert_equal(1, fruits.to_xml.scan('www.fruits.org').length)
+          assert_equal(2, fruits.xpath("//xmlns:Apple").length)
+          assert_equal(1, fruits.to_xml.scan("www.fruits.org").length)
         end
 
         [:clone, :dup].each do |symbol|
           define_method "test_#{symbol}" do
-            node = xml.at('//employee')
+            node = xml.at("//employee")
             other = node.send(symbol)
             assert_equal "employee", other.name
             assert_nil other.parent
           end
         end
 
+        def test_dup_should_not_copy_singleton_class
+          # https://github.com/sparklemotion/nokogiri/issues/316
+          m = Module.new do
+            def foo; end
+          end
+
+          node = Nokogiri::XML::Document.parse("<root/>").root
+          node.extend(m)
+
+          assert_respond_to(node, :foo)
+          refute_respond_to(node.dup, :foo)
+        end
+
+        def test_clone_should_copy_singleton_class
+          # https://github.com/sparklemotion/nokogiri/issues/316
+          m = Module.new do
+            def foo; end
+          end
+
+          node = Nokogiri::XML::Document.parse("<root/>").root
+          node.extend(m)
+
+          assert_respond_to(node, :foo)
+          assert_respond_to(node.clone, :foo)
+        end
+
+        def test_inspect_object_with_no_data_ptr
+          # test for the edge case when an exception is thrown during object construction/copy
+          node = Nokogiri::XML("<root>").root
+          refute_includes(node.inspect, "(no data)")
+
+          if node.respond_to?(:data_ptr?)
+            node.stub(:data_ptr?, false) do
+              assert_includes(node.inspect, "(no data)")
+            end
+          end
+        end
+
+        def test_fragment_creates_appropriate_class
+          frag = Nokogiri.XML("<root><child/></root>").at_css("child").fragment("<thing/>")
+          assert_instance_of(Nokogiri::XML::DocumentFragment, frag)
+
+          frag = Nokogiri.HTML4("<root><child/></root>").at_css("child").fragment("<thing/>")
+          assert_instance_of(Nokogiri::HTML4::DocumentFragment, frag)
+        end
+
         def test_fragment_creates_elements
-          apple = xml.fragment('<Apple/>')
+          apple = xml.fragment("<Apple/>")
           apple.children.each do |child|
             assert_equal(Nokogiri::XML::Node::ELEMENT_NODE, child.type)
             assert_instance_of(Nokogiri::XML::Element, child)
@@ -434,109 +572,109 @@ module Nokogiri
         end
 
         def test_node_added_to_root_should_get_namespace
-          fruits = Nokogiri::XML(<<~eoxml)
+          fruits = Nokogiri::XML(<<~XML)
             <Fruit xmlns='http://www.fruits.org'>
             </Fruit>
-          eoxml
-          apple = fruits.fragment('<Apple/>')
+          XML
+          apple = fruits.fragment("<Apple/>")
           fruits.root << apple
-          assert_equal(1, fruits.xpath('//xmlns:Apple').length)
+          assert_equal(1, fruits.xpath("//xmlns:Apple").length)
         end
 
         def test_new_node_can_have_ancestors
-          xml = Nokogiri::XML('<root>text</root>')
-          item = Nokogiri::XML::Element.new('item', xml)
+          xml = Nokogiri::XML("<root>text</root>")
+          item = Nokogiri::XML::Element.new("item", xml)
           assert_equal(0, item.ancestors.length)
         end
 
         def test_children
-          doc = Nokogiri::XML(<<~eoxml)
-            <root>#{'<a/>' * 9}</root>
-          eoxml
+          doc = Nokogiri::XML(<<~XML)
+            <root>#{"<a/>" * 9}</root>
+          XML
           assert_equal(9, doc.root.children.length)
           assert_equal(9, doc.root.children.to_a.length)
 
-          doc = Nokogiri::XML(<<~eoxml)
-            <root>#{'<a/>' * 15}</root>
-          eoxml
+          doc = Nokogiri::XML(<<~XML)
+            <root>#{"<a/>" * 15}</root>
+          XML
           assert_equal(15, doc.root.children.length)
           assert_equal(15, doc.root.children.to_a.length)
         end
 
         def test_add_namespace
-          node = xml.at('address')
-          node.add_namespace('foo', 'http://tenderlovemaking.com')
-          assert_equal('http://tenderlovemaking.com', node.namespaces['xmlns:foo'])
+          node = xml.at("address")
+          node.add_namespace("foo", "http://tenderlovemaking.com")
+          assert_equal("http://tenderlovemaking.com", node.namespaces["xmlns:foo"])
         end
 
         def test_add_namespace_twice
-          node = xml.at('address')
-          ns = node.add_namespace('foo', 'http://tenderlovemaking.com')
-          ns2 = node.add_namespace('foo', 'http://tenderlovemaking.com')
+          node = xml.at("address")
+          ns = node.add_namespace("foo", "http://tenderlovemaking.com")
+          ns2 = node.add_namespace("foo", "http://tenderlovemaking.com")
           assert_equal(ns, ns2)
         end
 
         def test_add_default_namespace
-          node = xml.at('address')
-          node.add_namespace(nil, 'http://tenderlovemaking.com')
-          assert_equal('http://tenderlovemaking.com', node.namespaces['xmlns'])
+          node = xml.at("address")
+          node.add_namespace(nil, "http://tenderlovemaking.com")
+          assert_equal("http://tenderlovemaking.com", node.namespaces["xmlns"])
         end
 
         def test_add_default_namespace_twice
-          node = xml.at('address')
-          ns = node.add_namespace(nil, 'http://tenderlovemaking.com')
-          ns2 = node.add_namespace(nil, 'http://tenderlovemaking.com')
-          assert_equal(ns.object_id, ns2.object_id)
+          node = xml.at("address")
+          ns = node.add_namespace(nil, "http://tenderlovemaking.com")
+          ns2 = node.add_namespace(nil, "http://tenderlovemaking.com")
+          assert_same(ns, ns2)
         end
 
         def test_add_multiple_namespaces
-          node = xml.at('address')
+          node = xml.at("address")
 
-          node.add_namespace(nil, 'http://tenderlovemaking.com')
-          assert_equal('http://tenderlovemaking.com', node.namespaces['xmlns'])
+          node.add_namespace(nil, "http://tenderlovemaking.com")
+          assert_equal("http://tenderlovemaking.com", node.namespaces["xmlns"])
 
-          node.add_namespace('foo', 'http://tenderlovemaking.com')
-          assert_equal('http://tenderlovemaking.com', node.namespaces['xmlns:foo'])
+          node.add_namespace("foo", "http://tenderlovemaking.com")
+          assert_equal("http://tenderlovemaking.com", node.namespaces["xmlns:foo"])
         end
 
         def test_default_namespace=
-          node = xml.at('address')
-          node.default_namespace = 'http://tenderlovemaking.com'
-          assert_equal('http://tenderlovemaking.com', node.namespaces['xmlns'])
+          node = xml.at("address")
+          node.default_namespace = "http://tenderlovemaking.com"
+          assert_equal("http://tenderlovemaking.com", node.namespaces["xmlns"])
         end
 
         def test_namespace=
-          node = xml.at('address')
+          node = xml.at("address")
           assert_nil(node.namespace)
-          definition = node.add_namespace_definition('bar', 'http://tlm.com/')
+          definition = node.add_namespace_definition("bar", "http://tlm.com/")
 
           node.namespace = definition
 
           assert_equal(definition, node.namespace)
 
-          assert_equal(node, xml.at('//foo:address', {
-            'foo' => 'http://tlm.com/',
+          assert_equal(node, xml.at("//foo:address", {
+            "foo" => "http://tlm.com/",
           }))
         end
 
         def test_add_namespace_with_nil_associates_node
-          node = xml.at('address')
+          node = xml.at("address")
           assert_nil(node.namespace)
-          definition = node.add_namespace_definition(nil, 'http://tlm.com/')
+          definition = node.add_namespace_definition(nil, "http://tlm.com/")
           assert_equal(definition, node.namespace)
         end
 
         def test_add_namespace_does_not_associate_node
-          node = xml.at('address')
+          node = xml.at("address")
           assert_nil(node.namespace)
-          assert(node.add_namespace_definition('foo', 'http://tlm.com/'))
+          assert(node.add_namespace_definition("foo", "http://tlm.com/"))
           assert_nil(node.namespace)
         end
 
         def test_set_namespace_from_different_doc
-          node = xml.at('address')
+          node = xml.at("address")
           doc = Nokogiri::XML(File.read(XML_FILE), XML_FILE)
-          decl = doc.root.add_namespace_definition('foo', 'bar')
+          decl = doc.root.add_namespace_definition("foo", "bar")
 
           assert_raises(ArgumentError) do
             node.namespace = decl
@@ -544,44 +682,45 @@ module Nokogiri
         end
 
         def test_set_namespace_must_only_take_a_namespace
-          node = xml.at('address')
+          node = xml.at("address")
           assert_raises(TypeError) do
             node.namespace = node
           end
         end
 
         def test_at
-          node = xml.at('address')
-          assert_equal(node, xml.xpath('//address').first)
+          node = xml.at("address")
+          assert_equal(node, xml.xpath("//address").first)
         end
 
         def test_at_self
-          node = xml.at('address')
-          assert_equal(node, node.at('.'))
+          node = xml.at("address")
+          assert_equal(node, node.at("."))
         end
 
         def test_at_xpath
-          node = xml.at_xpath('//address')
-          nodes = xml.xpath('//address')
+          node = xml.at_xpath("//address")
+          nodes = xml.xpath("//address")
           assert_equal(5, nodes.size)
           assert_equal(node, nodes.first)
         end
 
         def test_at_css
-          node = xml.at_css('address')
-          nodes = xml.css('address')
+          node = xml.at_css("address")
+          nodes = xml.css("address")
           assert_equal(5, nodes.size)
           assert_equal(node, nodes.first)
         end
 
         def test_percent
-          node = xml % 'address'
-          assert_equal(node, xml.xpath('//address').first)
+          node = xml % "address"
+          assert_equal(node, xml.xpath("//address").first)
         end
 
         def test_accept
           visitor = Class.new do
             attr_accessor :visited
+
             def accept(target)
               target.accept(self)
             end
@@ -618,12 +757,20 @@ module Nokogiri
           assert_equal(xml.serialize(nil, conf), string)
         end
 
-        %w{xml html xhtml}.each do |type|
+        ["xml", "html", "xhtml"].each do |type|
           define_method(:"test_write_#{type}_to") do
             io = StringIO.new
             assert xml.send(:"write_#{type}_to", io)
             io.rewind
             assert_match xml.send(:"to_#{type}"), io.read
+          end
+        end
+
+        def test_write_to_file_without_encoding
+          Tempfile.create do |io|
+            xml.write_to(io)
+            io.rewind
+            assert_equal(xml.to_xml, io.read)
           end
         end
 
@@ -640,32 +787,32 @@ module Nokogiri
           assert_equal(xml.serialize(nil, conf), string)
         end
 
-        def test_hold_refence_to_subnode
-          doc = Nokogiri::XML(<<~eoxml)
+        def test_hold_reference_to_subnode
+          doc = Nokogiri::XML(<<~XML)
             <root>
               <a>
                 <b />
               </a>
             </root>
-          eoxml
-          assert(node_a = doc.css('a').first)
-          assert(node_b = node_a.css('b').first)
+          XML
+          assert(node_a = doc.css("a").first)
+          assert(node_b = node_a.css("b").first)
           node_a.unlink
-          assert_equal('b', node_b.name)
+          assert_equal("b", node_b.name)
         end
 
         def test_xml_node_new
-          assert(node = Nokogiri::XML::Node.new('input', xml))
+          assert(node = Nokogiri::XML::Node.new("input", xml))
           assert_equal(Nokogiri::XML::Node::ELEMENT_NODE, node.node_type)
           assert_instance_of(Nokogiri::XML::Element, node)
-          assert_equal('input', node.name)
+          assert_equal("input", node.name)
           assert_equal(xml, node.document)
         end
 
         def test_xml_node_new_with_block
           block_param = nil
           block_called = false
-          node = Nokogiri::XML::Node.new('input', xml) do |node_param|
+          node = Nokogiri::XML::Node.new("input", xml) do |node_param|
             block_called = true
             block_param = node_param
           end
@@ -674,34 +821,46 @@ module Nokogiri
           assert_equal(node, block_param, "Node.new block should be passed the new node")
         end
 
+        def test_xml_node_new_must_take_document_type
+          assert_raises(ArgumentError) do
+            Nokogiri::XML::Node.new("input", "not-a-document")
+          end
+
+          assert_output(nil, /deprecated/) do
+            Nokogiri::XML::Node.new("input", xml.root.children.first)
+          end
+        end
+
         def test_to_str
-          name = xml.xpath('//name').first
-          assert_match(/Margaret/, '' + name)
-          assert_equal('Margaret Martin', '' + name.children.first)
+          name = xml.xpath("//name").first
+          assert_match(/Margaret/, "" + name)
+          assert_equal("Margaret Martin", "" + name.children.first)
         end
 
         def test_ancestors
-          address = xml.xpath('//address').first
+          address = xml.xpath("//address").first
           assert_equal(3, address.ancestors.length)
-          assert_equal(['employee', 'staff', 'document'],
-                       address.ancestors.map(&:name))
+          assert_equal(
+            ["employee", "staff", "document"],
+            address.ancestors.map(&:name),
+          )
         end
 
         def test_read_only?
           assert(entity_decl = xml.internal_subset.children.find do |x|
             x.type == Node::ENTITY_DECL
           end)
-          assert(entity_decl.read_only?)
+          assert_predicate(entity_decl, :read_only?)
         end
 
         def test_set_content_with_symbol
-          node = xml.at('//name')
+          node = xml.at("//name")
           node.content = :foo
-          assert_equal('foo', node.content)
+          assert_equal("foo", node.content)
         end
 
         def test_set_native_content_is_unescaped
-          comment = Nokogiri.XML('<r><!-- foo --></r>').at('//comment()')
+          comment = Nokogiri.XML("<r><!-- foo --></r>").at("//comment()")
 
           comment.native_content = " < " # content= will escape this string
           assert_equal("<!-- < -->", comment.to_xml)
@@ -709,11 +868,11 @@ module Nokogiri
 
         def test_find_by_css_class_with_nonstandard_whitespace
           doc = Nokogiri::HTML("<div class='a\nb'></div>")
-          assert_not_nil(doc.at_css(".b"))
+          refute_nil(doc.at_css(".b"))
         end
 
         def test_find_by_css_with_tilde_eql
-          xml = Nokogiri::XML.parse(<<~eoxml)
+          xml = Nokogiri::XML.parse(<<~XML)
             <root>
               <a>Hello world</a>
               <a class='foo bar'>Bar</a>
@@ -723,14 +882,14 @@ module Nokogiri
               <a class='bazbarfoo'>Awesome</a>
               <a class='bazbar'>Awesome</a>
             </root>
-          eoxml
+          XML
           set = xml.css('a[@class~="bar"]')
           assert_equal(4, set.length)
-          assert_equal(['Bar'], set.map(&:content).uniq)
+          assert_equal(["Bar"], set.map(&:content).uniq)
         end
 
         def test_unlink
-          xml = Nokogiri::XML.parse(<<~eoxml)
+          xml = Nokogiri::XML.parse(<<~XML)
             <root>
               <a class='foo bar'>Bar</a>
               <a class='bar foo'>Bar</a>
@@ -740,140 +899,140 @@ module Nokogiri
               <a class='bazbarfoo'>Awesome</a>
               <a class='bazbar'>Awesome</a>
             </root>
-          eoxml
-          node = xml.xpath('//a')[3]
-          assert_equal('Hello world', node.text)
+          XML
+          node = xml.xpath("//a")[3]
+          assert_equal("Hello world", node.text)
           assert_match(/Hello world/, xml.to_s)
           assert(node.parent)
           assert(node.document)
           assert(node.previous_sibling)
           assert(node.next_sibling)
           node.unlink
-          assert(!node.parent)
+          refute(node.parent)
           # assert !node.document
-          assert(!node.previous_sibling)
-          assert(!node.next_sibling)
-          assert_no_match(/Hello world/, xml.to_s)
+          refute(node.previous_sibling)
+          refute(node.next_sibling)
+          refute_match(/Hello world/, xml.to_s)
         end
 
         def test_next_sibling
           assert(node = xml.root)
           assert(sibling = node.child.next_sibling)
-          assert_equal('employee', sibling.name)
+          assert_equal("employee", sibling.name)
         end
 
         def test_previous_sibling
           assert(node = xml.root)
           assert(sibling = node.child.next_sibling)
-          assert_equal('employee', sibling.name)
+          assert_equal("employee", sibling.name)
           assert_equal(sibling.previous_sibling, node.child)
         end
 
         def test_name=
           assert(node = xml.root)
-          node.name = 'awesome'
-          assert_equal('awesome', node.name)
+          node.name = "awesome"
+          assert_equal("awesome", node.name)
         end
 
         def test_child
           assert(node = xml.root)
           assert(child = node.child)
-          assert_equal('text', child.name)
+          assert_equal("text", child.name)
         end
 
         def test_key?
-          assert(node = xml.search('//address').first)
-          assert(!node.key?('asdfasdf'))
+          assert(node = xml.search("//address").first)
+          refute(node.key?("asdfasdf"))
         end
 
         def test_set_property
-          assert(node = xml.search('//address').first)
-          node['foo'] = 'bar'
-          assert_equal('bar', node['foo'])
+          assert(node = xml.search("//address").first)
+          node["foo"] = "bar"
+          assert_equal("bar", node["foo"])
         end
 
         def test_set_property_non_string
-          assert(node = xml.search('//address').first)
-          node['foo'] = 1
-          assert_equal('1', node['foo'])
-          node['foo'] = false
-          assert_equal('false', node['foo'])
+          assert(node = xml.search("//address").first)
+          node["foo"] = 1
+          assert_equal("1", node["foo"])
+          node["foo"] = false
+          assert_equal("false", node["foo"])
         end
 
         def test_path
-          assert(set = xml.search('//employee'))
+          assert(set = xml.search("//employee"))
           assert(node = set.first)
-          assert_equal('/staff/employee[1]', node.path)
+          assert_equal("/staff/employee[1]", node.path)
         end
 
         def test_parent_xpath
-          assert(set = xml.search('//employee'))
+          assert(set = xml.search("//employee"))
           assert(node = set.first)
-          assert(parent_set = node.search('..'))
+          assert(parent_set = node.search(".."))
           assert(parent_node = parent_set.first)
-          assert_equal('/staff', parent_node.path)
+          assert_equal("/staff", parent_node.path)
           assert_equal(node.parent, parent_node)
         end
 
         def test_search_self
-          node = xml.at('//employee')
-          assert_equal(node.search('.').to_a, [node])
+          node = xml.at("//employee")
+          assert_equal(node.search(".").to_a, [node])
         end
 
         def test_search_by_symbol
           assert(set = xml.search(:employee))
-          assert(5, set.length)
+          assert_equal(5, set.length)
 
           assert(node = xml.at(:employee))
-          assert(node.text =~ /EMP0001/)
+          assert_match(/EMP0001/, node.text)
         end
 
         def test_encode_special_chars
-          foo = xml.css('employee').first.encode_special_chars('&')
-          assert_equal('&amp;', foo)
+          foo = xml.css("employee").first.encode_special_chars("&")
+          assert_equal("&amp;", foo)
         end
 
         def test_content_equals
-          node = Nokogiri::XML::Node.new('form', xml)
-          assert_equal('', node.content)
+          node = Nokogiri::XML::Node.new("form", xml)
+          assert_equal("", node.content)
 
-          node.content = 'hello world!'
-          assert_equal('hello world!', node.content)
+          node.content = "hello world!"
+          assert_equal("hello world!", node.content)
 
-          node.content = '& <foo> &amp;'
-          assert_equal('& <foo> &amp;', node.content)
-          assert_equal('<form>&amp; &lt;foo&gt; &amp;amp;</form>', node.to_xml)
+          node.content = "& <foo> &amp;"
+          assert_equal("& <foo> &amp;", node.content)
+          assert_equal("<form>&amp; &lt;foo&gt; &amp;amp;</form>", node.to_xml)
 
           node.content = "1234 <-> 1234"
           assert_equal("1234 <-> 1234", node.content)
           assert_equal("<form>1234 &lt;-&gt; 1234</form>", node.to_xml)
 
-          node.content = '1234'
-          node.add_child('<foo>5678</foo>')
-          assert_equal('12345678', node.content)
+          node.content = "1234"
+          node.add_child("<foo>5678</foo>")
+          assert_equal("12345678", node.content)
         end
 
         # issue #839
         def test_encoding_of_copied_nodes
-          d1 = Nokogiri::XML('<r><a>&amp;</a></r>')
-          d2 = Nokogiri::XML('<r></r>')
-          ne = d1.root.xpath('//a').first.dup(1)
+          d1 = Nokogiri::XML("<r><a>&amp;</a></r>")
+          d2 = Nokogiri::XML("<r></r>")
+          ne = d1.root.xpath("//a").first.dup(1)
           ne.content += "& < & > \" &"
           d2.root << ne
           assert_match(%r{<a>&amp;&amp; &lt; &amp; &gt; \" &amp;</a>}, d2.to_s)
         end
 
         def test_content_after_appending_text
-          doc = Nokogiri::XML('<foo />')
+          doc = Nokogiri::XML("<foo />")
           node = doc.children.first
-          node.content = 'bar'
-          node << 'baz'
-          assert_equal('barbaz', node.content)
+          node.content = "bar"
+          node << "baz"
+          assert_equal("barbaz", node.content)
         end
 
         def test_content_depth_first
-          node = Nokogiri::XML('<foo>first<baz>second</baz>third</foo>')
-          assert_equal('firstsecondthird', node.content)
+          node = Nokogiri::XML("<foo>first<baz>second</baz>third</foo>")
+          assert_equal("firstsecondthird", node.content)
         end
 
         def test_set_content_should_unlink_existing_content
@@ -885,7 +1044,7 @@ module Nokogiri
 
         def test_whitespace_nodes
           doc = Nokogiri::XML.parse("<root><b>Foo</b>\n<i>Bar</i> <p>Bazz</p></root>")
-          children = doc.at('//root').children.collect(&:to_s)
+          children = doc.at("//root").children.collect(&:to_s)
           assert_equal("\n", children[1])
           assert_equal(" ", children[3])
         end
@@ -894,17 +1053,17 @@ module Nokogiri
           doc1 = Nokogiri::XML.parse(File.read(XML_FILE), XML_FILE)
           doc2 = Nokogiri::XML.parse(File.read(XML_FILE), XML_FILE)
 
-          address1_1 = doc1.xpath('//address').first
-          address1_2 = doc1.xpath('//address').first
+          address1_1 = doc1.xpath("//address").first
+          address1_2 = doc1.xpath("//address").first
 
-          address2 = doc2.xpath('//address').first
+          address2 = doc2.xpath("//address").first
 
-          assert_not_equal(address1_1, address2) # two references to very, very similar nodes
+          refute_equal(address1_1, address2) # two references to very, very similar nodes
           assert_equal(address1_1, address1_2) # two references to the exact same node
         end
 
         def test_namespace_search_with_xpath_and_hash
-          xml = Nokogiri::XML.parse(<<~eoxml)
+          xml = Nokogiri::XML.parse(<<~XML)
             <root>
               <car xmlns:part="http://general-motors.com/">
                 <part:tire>Michelin Model XGV</part:tire>
@@ -913,14 +1072,14 @@ module Nokogiri
                 <part:tire>I'm a bicycle tire!</part:tire>
               </bicycle>
             </root>
-          eoxml
+          XML
 
-          tires = xml.xpath('//bike:tire', { 'bike' => 'http://schwinn.com/' })
+          tires = xml.xpath("//bike:tire", { "bike" => "http://schwinn.com/" })
           assert_equal(1, tires.length)
         end
 
         def test_namespace_search_with_xpath_and_hash_with_symbol_keys
-          xml = Nokogiri::XML.parse(<<~eoxml)
+          xml = Nokogiri::XML.parse(<<~XML)
             <root>
               <car xmlns:part="http://general-motors.com/">
                 <part:tire>Michelin Model XGV</part:tire>
@@ -929,14 +1088,14 @@ module Nokogiri
                 <part:tire>I'm a bicycle tire!</part:tire>
               </bicycle>
             </root>
-          eoxml
+          XML
 
-          tires = xml.xpath('//bike:tire', bike: 'http://schwinn.com/')
+          tires = xml.xpath("//bike:tire", bike: "http://schwinn.com/")
           assert_equal(1, tires.length)
         end
 
         def test_namespace_search_with_css
-          xml = Nokogiri::XML.parse(<<~eoxml)
+          xml = Nokogiri::XML.parse(<<~XML)
             <root>
               <car xmlns:part="http://general-motors.com/">
                 <part:tire>Michelin Model XGV</part:tire>
@@ -945,93 +1104,118 @@ module Nokogiri
                 <part:tire>I'm a bicycle tire!</part:tire>
               </bicycle>
             </root>
-          eoxml
+          XML
 
-          tires = xml.css('bike|tire', 'bike' => 'http://schwinn.com/')
+          tires = xml.css("bike|tire", "bike" => "http://schwinn.com/")
           assert_equal(1, tires.length)
         end
 
         def test_namespaced_attribute_search_with_xpath
           # from #593
-          xmlContent = <<~EOXML
+          xml_content = <<~XML
             <?xml version="1.0"?>
             <ns1:el1 xmlns:ns1="http://blabla.com" >
               <ns1:el2 ns1:att="123">with namespace</ns1:el2 >
               <ns1:el2 att="noNameSpace">no namespace</ns1:el2 >
             </ns1:el1>
-          EOXML
-          xml_doc = Nokogiri::XML(xmlContent)
+          XML
+          xml_doc = Nokogiri::XML(xml_content)
 
           no_ns = xml_doc.xpath("//*[@att]")
-          assert_equal(no_ns.length, 1)
-          assert_equal(no_ns.first.content, "no namespace")
+          assert_equal(1, no_ns.length)
+          assert_equal("no namespace", no_ns.first.content)
 
           with_ns = xml_doc.xpath("//*[@ns1:att]")
-          assert_equal(with_ns.length, 1)
-          assert_equal(with_ns.first.content, "with namespace")
+          assert_equal(1, with_ns.length)
+          assert_equal("with namespace", with_ns.first.content)
         end
 
         def test_namespaced_attribute_search_with_css
           # from #593
-          xmlContent = <<~EOXML
+          xml_content = <<~XML
             <?xml version="1.0"?>
             <ns1:el1 xmlns:ns1="http://blabla.com" >
               <ns1:el2 ns1:att="123">with namespace</ns1:el2 >
               <ns1:el2 att="noNameSpace">no namespace</ns1:el2 >
             </ns1:el1>
-          EOXML
-          xml_doc = Nokogiri::XML(xmlContent)
+          XML
+          xml_doc = Nokogiri::XML(xml_content)
 
-          no_ns = xml_doc.css('*[att]')
-          assert_equal(no_ns.length, 1)
-          assert_equal(no_ns.first.content, "no namespace")
+          no_ns = xml_doc.css("*[att]")
+          assert_equal(1, no_ns.length)
+          assert_equal("no namespace", no_ns.first.content)
 
-          with_ns = xml_doc.css('*[ns1|att]')
-          assert_equal(with_ns.length, 1)
-          assert_equal(with_ns.first.content, "with namespace")
+          with_ns = xml_doc.css("*[ns1|att]")
+          assert_equal(1, with_ns.length)
+          assert_equal("with namespace", with_ns.first.content)
         end
 
         def test_namespaces_should_include_all_namespace_definitions
-          xml = Nokogiri::XML.parse(<<~EOF)
+          xml = Nokogiri::XML.parse(<<~XML)
             <x xmlns="http://quux.com/" xmlns:a="http://foo.com/" xmlns:b="http://bar.com/">
               <y xmlns:c="http://bazz.com/">
                 <z>hello</z>
                 <a xmlns:c="http://newc.com/" />
               </y>
             </x>
-          EOF
+          XML
 
           namespaces = xml.namespaces # Document#namespace
-          assert_equal({ "xmlns" => "http://quux.com/",
-                         "xmlns:a" => "http://foo.com/",
-                         "xmlns:b" => "http://bar.com/" }, namespaces)
+          assert_equal(
+            {
+              "xmlns" => "http://quux.com/",
+              "xmlns:a" => "http://foo.com/",
+              "xmlns:b" => "http://bar.com/",
+            },
+            namespaces,
+          )
 
           namespaces = xml.root.namespaces
-          assert_equal({ "xmlns" => "http://quux.com/",
-                         "xmlns:a" => "http://foo.com/",
-                         "xmlns:b" => "http://bar.com/" }, namespaces)
+          assert_equal(
+            {
+              "xmlns" => "http://quux.com/",
+              "xmlns:a" => "http://foo.com/",
+              "xmlns:b" => "http://bar.com/",
+            },
+            namespaces,
+          )
 
           namespaces = xml.at_xpath("//xmlns:y").namespaces
-          assert_equal({ "xmlns" => "http://quux.com/",
-                         "xmlns:a" => "http://foo.com/",
-                         "xmlns:b" => "http://bar.com/",
-                         "xmlns:c" => "http://bazz.com/" }, namespaces)
+          assert_equal(
+            {
+              "xmlns" => "http://quux.com/",
+              "xmlns:a" => "http://foo.com/",
+              "xmlns:b" => "http://bar.com/",
+              "xmlns:c" => "http://bazz.com/",
+            },
+            namespaces,
+          )
 
           namespaces = xml.at_xpath("//xmlns:z").namespaces
-          assert_equal({ "xmlns" => "http://quux.com/",
-                         "xmlns:a" => "http://foo.com/",
-                         "xmlns:b" => "http://bar.com/",
-                         "xmlns:c" => "http://bazz.com/" }, namespaces)
+          assert_equal(
+            {
+              "xmlns" => "http://quux.com/",
+              "xmlns:a" => "http://foo.com/",
+              "xmlns:b" => "http://bar.com/",
+              "xmlns:c" => "http://bazz.com/",
+            },
+            namespaces,
+          )
 
           namespaces = xml.at_xpath("//xmlns:a").namespaces
-          assert_equal({ "xmlns" => "http://quux.com/",
-                         "xmlns:a" => "http://foo.com/",
-                         "xmlns:b" => "http://bar.com/",
-                         "xmlns:c" => "http://newc.com/" }, namespaces)
+          assert_equal(
+            {
+              "xmlns" => "http://quux.com/",
+              "xmlns:a" => "http://foo.com/",
+              "xmlns:b" => "http://bar.com/",
+              "xmlns:c" => "http://newc.com/",
+            },
+            namespaces,
+          )
         end
 
         def test_namespace
-          xml = Nokogiri::XML.parse(<<~EOF)
+          xml = Nokogiri::XML.parse(<<~XML)
             <x xmlns:a='http://foo.com/' xmlns:b='http://bar.com/'>
               <y xmlns:c='http://bazz.com/'>
                 <a:div>hello a</a:div>
@@ -1041,23 +1225,23 @@ module Nokogiri
                 <div x="1">hello moon</div>
               </y>
             </x>
-          EOF
+          XML
           set = xml.search("//y/*")
           assert_equal("a", set[0].namespace.prefix)
-          assert_equal('http://foo.com/', set[0].namespace.href)
+          assert_equal("http://foo.com/", set[0].namespace.href)
           assert_equal("b", set[1].namespace.prefix)
-          assert_equal('http://bar.com/', set[1].namespace.href)
+          assert_equal("http://bar.com/", set[1].namespace.href)
           assert_equal("c", set[2].namespace.prefix)
-          assert_equal('http://bazz.com/', set[2].namespace.href)
+          assert_equal("http://bazz.com/", set[2].namespace.href)
           assert_nil(set[3].namespace.prefix) # default namespace
-          assert_equal('http://ns.example.com/d', set[3].namespace.href)
+          assert_equal("http://ns.example.com/d", set[3].namespace.href)
           assert_nil(set[4].namespace) # no namespace
 
-          assert_equal('b', set[2].attributes['y'].namespace.prefix)
-          assert_equal('http://bar.com/', set[2].attributes['y'].namespace.href)
-          assert_nil(set[2].attributes['x'].namespace)
-          assert_nil(set[3].attributes['x'].namespace)
-          assert_nil(set[4].attributes['x'].namespace)
+          assert_equal("b", set[2].attributes["y"].namespace.prefix)
+          assert_equal("http://bar.com/", set[2].attributes["y"].namespace.href)
+          assert_nil(set[2].attributes["x"].namespace)
+          assert_nil(set[3].attributes["x"].namespace)
+          assert_nil(set[4].attributes["x"].namespace)
         end
 
         def test_namespace_without_an_href_on_html_node
@@ -1065,23 +1249,23 @@ module Nokogiri
           #  describe how we handle microsoft word's HTML formatting.
           #  this test is descriptive, not prescriptive.
           #
-          html = Nokogiri::HTML.parse(<<~EOF)
+          html = Nokogiri::HTML4.parse(<<~XML)
             <div><o:p>foo</o:p></div>
-          EOF
+          XML
           node = html.at("div").children.first
-          assert_not_nil(node)
+          refute_nil(node)
 
-          if Nokogiri.uses_libxml?(">= 2.9.12")
+          if Nokogiri.uses_libxml?(">= 2.10.4") || Nokogiri.jruby?
+            assert_empty(node.namespaces.keys)
+            assert_equal("<o:p>foo</o:p>", node.to_html)
+          elsif Nokogiri.uses_libxml?(">= 2.9.12")
             assert_empty(node.namespaces.keys)
             assert_equal("<p>foo</p>", node.to_html)
           elsif Nokogiri.uses_libxml?
             assert_equal(1, node.namespaces.keys.size)
-            assert(node.namespaces.has_key?('xmlns:o'))
-            assert_nil(node.namespaces['xmlns:o'])
+            assert(node.namespaces.key?("xmlns:o"))
+            assert_nil(node.namespaces["xmlns:o"])
             assert_equal("<p>foo</p>", node.to_html)
-          else # jruby
-            assert_empty(node.namespaces.keys)
-            assert_equal("<o:p>foo</o:p>", node.to_html)
           end
         end
 
@@ -1092,7 +1276,7 @@ module Nokogiri
           util_decorate(xml, x)
           node_set = xml.xpath("//employee")
           assert_equal(xml, node_set.document)
-          assert(node_set.respond_to?(:awesome!))
+          assert_respond_to(node_set, :awesome!)
         end
 
         def test_css_results_have_document_and_are_decorated
@@ -1102,12 +1286,15 @@ module Nokogiri
           util_decorate(xml, x)
           node_set = xml.css("employee")
           assert_equal(xml, node_set.document)
-          assert(node_set.respond_to?(:awesome!))
+          assert_respond_to(node_set, :awesome!)
         end
 
-        def test_blank
-          doc = Nokogiri::XML('')
-          assert_equal(false, doc.blank?)
+        def test_blank_eh
+          refute_predicate(Nokogiri(""), :blank?)
+          refute_predicate(Nokogiri("<root><child/></root>").root.child, :blank?)
+          assert_predicate(Nokogiri("<root>\t \n</root>").root.child, :blank?)
+          assert_predicate(Nokogiri("<root><![CDATA[\t \n]]></root>").root.child, :blank?)
+          assert_predicate(Nokogiri("<root>not-blank</root>").root.child.tap { |n| n.content = "" }, :blank?)
         end
 
         def test_to_xml_allows_to_serialize_with_as_xml_save_option
@@ -1115,47 +1302,47 @@ module Nokogiri
           set = xml.search("//ul")
           node = set.first
 
-          assert_no_match("<ul>\n  <li>", xml.to_xml(save_with: XML::Node::SaveOptions::AS_XML))
-          assert_no_match("<ul>\n  <li>", node.to_xml(save_with: XML::Node::SaveOptions::AS_XML))
+          refute_match("<ul>\n  <li>", xml.to_xml(save_with: XML::Node::SaveOptions::AS_XML))
+          refute_match("<ul>\n  <li>", node.to_xml(save_with: XML::Node::SaveOptions::AS_XML))
         end
 
         # issue 647
         def test_default_namespace_should_be_created
           subject = Nokogiri::XML.parse('<foo xml:bar="http://bar.com"/>').root
-          ns = subject.attributes['bar'].namespace
-          assert_not_nil(ns)
+          ns = subject.attributes["bar"].namespace
+          refute_nil(ns)
           assert_equal(ns.class, Nokogiri::XML::Namespace)
-          assert_equal('xml', ns.prefix)
+          assert_equal("xml", ns.prefix)
           assert_equal("http://www.w3.org/XML/1998/namespace", ns.href)
         end
 
         # issue 648
         def test_namespace_without_prefix_should_be_set
           node = Nokogiri::XML.parse('<foo xmlns="http://bar.com"/>').root
-          subject = Nokogiri::XML::Node.new('foo', node.document)
+          subject = Nokogiri::XML::Node.new("foo", node.document)
           subject.namespace = node.namespace
           ns = subject.namespace
           assert_equal(ns.class, Nokogiri::XML::Namespace)
           assert_nil(ns.prefix)
-          assert_equal(ns.href, "http://bar.com")
+          assert_equal("http://bar.com", ns.href)
         end
 
         # issue 695
         def test_namespace_in_rendered_xml
           document = Nokogiri::XML::Document.new
-          subject = Nokogiri::XML::Node.new('foo', document)
-          ns = subject.add_namespace(nil, 'bar')
+          subject = Nokogiri::XML::Node.new("foo", document)
+          ns = subject.add_namespace(nil, "bar")
           subject.namespace = ns
           assert_match(/xmlns="bar"/, subject.to_xml)
         end
 
         # issue 771
         def test_format_noblank
-          content = <<~eoxml
+          content = <<~XML
             <foo>
               <bar>hello</bar>
             </foo>
-          eoxml
+          XML
           subject = Nokogiri::XML(content) do |conf|
             conf.default_xml.noblanks
           end
@@ -1165,7 +1352,7 @@ module Nokogiri
 
         def test_text_node_colon
           document = Nokogiri::XML::Document.new
-          root = Nokogiri::XML::Node.new('foo', document)
+          root = Nokogiri::XML::Node.new("foo", document)
           document.root = root
           root << "<a>hello:with_colon</a>"
           assert_match(/hello:with_colon/, document.to_xml)
@@ -1177,22 +1364,22 @@ module Nokogiri
           html_node = html_doc.at_css("div")
           xml_node = xml_doc.at_css("div")
 
-          assert(html_doc.document?)
-          assert(xml_doc.document?)
-          assert(!html_node.document?)
-          assert(!xml_node.document?)
+          assert_predicate(html_doc, :document?)
+          assert_predicate(xml_doc, :document?)
+          refute_predicate(html_node, :document?)
+          refute_predicate(xml_node, :document?)
         end
 
         def test_processing_instruction_eh
           xml_doc = Nokogiri::XML(%{<?xml version="1.0"?>\n<?xml-stylesheet type="text/xsl" href="foo.xsl"?>\n<?xml-stylesheet type="text/xsl" href="foo2.xsl"?>\n<root><div>foo</div></root>})
           pi_node = xml_doc.children.first
           div_node = xml_doc.at_css("div")
-          assert(pi_node.processing_instruction?)
-          assert(!div_node.processing_instruction?)
+          assert_predicate(pi_node, :processing_instruction?)
+          refute_predicate(div_node, :processing_instruction?)
         end
 
         def test_node_lang
-          document = Nokogiri::XML(<<~EOXML)
+          document = Nokogiri::XML(<<~XML)
             <root>
               <div class='english'  xml:lang='en'>
                 <div class='english_child'>foo</div>
@@ -1200,7 +1387,7 @@ module Nokogiri
               <div class='japanese' xml:lang='jp'>bar</div>
               <div class='unspecified'>bar</div>
             </root>
-          EOXML
+          XML
           assert_equal("en", document.at_css(".english").lang)
           assert_equal("en", document.at_css(".english_child").lang)
           assert_equal("jp", document.at_css(".japanese").lang)
@@ -1218,32 +1405,150 @@ module Nokogiri
           assert_equal("fr", subject.lang)
         end
 
-        def test_text_node_robustness_gh1426
-          skip("only run if NOKOGIRI_GC is set") unless ENV['NOKOGIRI_GC']
-          skip_unless_libxml2("No need to test libxml-ruby workarounds on JRuby")
-          # notably, the original bug report was about libxml-ruby interactions
-          # this test should blow up under valgrind if we regress on libxml-ruby workarounds
-          # side note: this was fixed in libxml-ruby 2.9.0 by https://github.com/xml4r/libxml-ruby/pull/119
-          message = "<section><h2>BOOM!</h2></section>"
-          10_000.times do
-            node = Nokogiri::HTML::DocumentFragment.parse(message).at_css("h2")
-            node.add_previous_sibling(Nokogiri::XML::Text.new('before', node.document))
-            node.add_next_sibling(Nokogiri::XML::Text.new('after', node.document))
+        # issue 2559
+        def test_serialize_unparented_node
+          assert_equal("asdf", Nokogiri::HTML4::Document.parse("<div></div>").create_text_node("asdf").to_s)
+        end
+
+        describe "#wrap" do
+          let(:xml) { "<root><thing><div>important thing</div></thing></root>" }
+          let(:doc) { Nokogiri::XML(xml) }
+
+          describe "string markup argument" do
+            it "parses and wraps" do
+              thing = doc.at_css("thing")
+              rval = thing.wrap("<wrapper/>")
+              wrapper = doc.at_css("wrapper")
+
+              assert_equal(rval, thing)
+              assert_equal(wrapper, thing.parent)
+              assert_equal("root", wrapper.parent.name)
+              assert_equal(1, wrapper.children.length)
+              assert_equal("thing", wrapper.children.first.name)
+            end
+
+            it "wraps unparented nodes" do
+              thing = doc.create_element("thing")
+              thing.wrap("<wrapper/>")
+
+              assert_equal("wrapper", thing.parent.name)
+              assert_nil(thing.parent.parent)
+            end
+          end
+
+          describe "Node argument" do
+            it "wraps using a dup of the node" do
+              thing = doc.at_css("thing")
+              wrapper_template = doc.create_element("wrapper")
+              rval = thing.wrap(wrapper_template)
+              wrapper = doc.at_css("wrapper")
+
+              assert_equal(rval, thing)
+              refute_equal(wrapper, wrapper_template)
+              assert_equal(wrapper, thing.parent)
+              assert_equal("root", wrapper.parent.name)
+              assert_equal(1, wrapper.children.length)
+              assert_equal("thing", wrapper.children.first.name)
+            end
+
+            it "wraps unparented nodes" do
+              thing = doc.create_element("thing")
+              wrapper_template = doc.create_element("wrapper")
+              thing.wrap(wrapper_template)
+
+              refute_equal(wrapper_template, thing.parent)
+              assert_equal("wrapper", thing.parent.name)
+              assert_nil(thing.parent.parent)
+            end
+          end
+
+          it "raises an error if the input is not parseable" do
+            thing = doc.at_css("thing")
+
+            e = assert_raises(RuntimeError) do
+              thing.wrap("<<")
+            end
+            assert_includes(e.message, "Failed to parse '<<' in the context of a 'root' element")
+          end
+
+          it "raises an ArgumentError on other types" do
+            thing = doc.at_css("thing")
+
+            e = assert_raises(ArgumentError) do
+              thing.wrap(1)
+            end
+            assert_includes(e.message, "Requires a String or Node argument, and cannot accept a Integer")
           end
         end
 
-        def test_wrap
-          xml = '<root><thing><div class="title">important thing</div></thing></root>'
-          doc = Nokogiri::XML(xml)
-          thing = doc.at_css("thing")
-          thing.wrap("<wrapper/>")
-          assert_equal('wrapper', thing.parent.name)
-          assert_equal('thing', doc.at_css("wrapper").children.first.name)
-        end
-
         describe "#line" do
+          it "counts lines" do
+            xml = Nokogiri::XML(<<~XML)
+              <a>
+                <b>Test</b>
+              </a>
+            XML
+
+            if Nokogiri.jruby?
+              # in the output
+              assert_equal(3, xml.at_css("b").line)
+            else
+              # in the input
+              assert_equal(2, xml.at_css("b").line)
+            end
+          end
+
+          it "properly numbers lines with documents containing XML prolog" do
+            xml = Nokogiri::XML(<<~XML)
+              <?xml version="1.0" ?>
+              <a>
+                <b>Test</b>
+              </a>
+            XML
+
+            assert_equal(3, xml.at_css("b").line)
+          end
+
+          it "properly numbers lines with documents containing XML comments" do
+            xml = Nokogiri::XML(<<~XML)
+              <a>
+                <b>
+                  <!-- This is a comment -->
+                  <c>Test</c>
+                </b>
+              </a>
+            XML
+
+            if Nokogiri.jruby?
+              assert_equal(5, xml.at_css("c").line)
+            else
+              assert_equal(4, xml.at_css("c").line)
+            end
+          end
+
+          it "properly numbers lines with documents containing XML multiline comments" do
+            xml = Nokogiri::XML(<<~XML)
+              <a>
+                <b>
+                  <!--
+                    This is a comment
+                  -->
+                  <c>
+                    Test
+                  </c>
+                </b>
+              </a>
+            XML
+
+            if Nokogiri.jruby?
+              assert_equal(7, xml.at_css("c").line)
+            else
+              assert_equal(6, xml.at_css("c").line)
+            end
+          end
+
           it "returns a sensible line number for each node" do
-            xml = Nokogiri::XML(<<~eoxml)
+            xml = Nokogiri::XML(<<~XML)
               <a>
                 <b>
                   Hello world
@@ -1252,11 +1557,16 @@ module Nokogiri
                   Goodbye world
                 </b>
               </root>
-            eoxml
+            XML
 
-            set = xml.search("//b")
-            assert_equal(2, set[0].line)
-            assert_equal(5, set[1].line)
+            set = xml.css("b")
+            if Nokogiri.jruby?
+              assert_equal(3, set[0].line)
+              assert_equal(6, set[1].line)
+            else
+              assert_equal(2, set[0].line)
+              assert_equal(5, set[1].line)
+            end
           end
 
           it "supports a line number greater than a short int" do
@@ -1272,9 +1582,9 @@ module Nokogiri
             end.string
 
             if Nokogiri.uses_libxml?
-              doc = Nokogiri::XML(xml) { |c| c.nobig_lines }
+              doc = Nokogiri::XML(xml, &:nobig_lines)
               node = doc.at_css("x")
-              assert_operator(node.line, :==, max_short_int)
+              assert_equal(node.line, max_short_int)
             end
 
             doc = Nokogiri::XML(xml)
@@ -1287,7 +1597,7 @@ module Nokogiri
           it "overrides the line number of a node" do
             skip_unless_libxml2("Xerces does not have line numbers for nodes")
             document = Nokogiri::XML::Document.new
-            node = document.create_element('a')
+            node = document.create_element("a")
             node.line = 54321
             assert_equal(54321, node.line)
           end

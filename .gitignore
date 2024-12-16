@@ -9,8 +9,6 @@
 /gems/
 /lib/nokogiri/**/nokogiri.bundle
 /lib/nokogiri/**/nokogiri.so
-/lib/nokogumbo/**/nokogumbo.bundle
-/lib/nokogumbo/**/nokogumbo.so
 /lib/nokogiri/nokogiri.jar
 /pkg/
 /ports/
@@ -20,16 +18,22 @@
 /coverage/
 
 # documentation
-/.yardoc/
-/doc/
+/html/
+/ri/
 
 # editors and tags
+.cache
 .classpath
 .project
 .settings
+.vscode
 build
+compile_commands.json
 TAGS
 tags
+
+# auto-formatting
+/ext/**/*.orig
 
 # mac
 .DS_Store/
@@ -38,5 +42,8 @@ tags
 /.vagrant/
 
 # directories or files named after issues, and debugging
-/[0-9][0-9][0-9]*
+/issues
 /*.log
+
+# rbenv
+.ruby-version

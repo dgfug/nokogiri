@@ -51,7 +51,7 @@ import org.xml.sax.ContentHandler;
  * Note that it doesn't necessarily represent a full Document
  * tree. You can wrap a DOM2DTM around a specific node and its subtree
  * and the right things should happen. (I don't _think_ we currently
- * support DocumentFrgment nodes as roots, though that might be worth
+ * support DocumentFragment nodes as roots, though that might be worth
  * considering.)
  *
  * Note too that we do not currently attempt to track document
@@ -63,7 +63,7 @@ public class DOM2DTM extends DTMDefaultBaseIterators
 //    static final boolean JJK_DEBUG=false;
 //    static final boolean JJK_NEWCODE=true;
 
-  /** Manefest constant
+  /** Manifest constant
    */
   static final String NAMESPACE_DECL_NS = "http://www.w3.org/XML/1998/namespace";
 
@@ -330,7 +330,7 @@ public class DOM2DTM extends DTMDefaultBaseIterators
     }
 
     // %REVIEW% Is this local copy Really Useful from a performance
-    // point of view?  Or is this a false microoptimization?
+    // point of view?  Or is this a false micro-optimization?
     Node pos = m_pos;
     Node next = null;
     int nexttype = NULL;
@@ -453,7 +453,7 @@ public class DOM2DTM extends DTMDefaultBaseIterators
     // sequence. The lastTextNode value will be set to the last node in the
     // contiguous sequence, and -- AFTER the DTM addNode -- can be used to
     // advance next over this whole block. Should be simpler than special-casing
-    // the above loop for "Was the logically-preceeding sibling a text node".
+    // the above loop for "Was the logically-preceding sibling a text node".
     //
     // Finally, a DTM node should be considered a CDATASection only if all the
     // contiguous text it covers is CDATASections. The first Text should
@@ -580,7 +580,7 @@ public class DOM2DTM extends DTMDefaultBaseIterators
 
     int identity = makeNodeIdentity(nodeHandle);
 
-    return (Node) m_nodes.get(identity);
+    return m_nodes.get(identity);
   }
 
   /**
@@ -593,7 +593,7 @@ public class DOM2DTM extends DTMDefaultBaseIterators
   protected Node
   lookupNode(int nodeIdentity)
   {
-    return (Node) m_nodes.get(nodeIdentity);
+    return m_nodes.get(nodeIdentity);
   }
 
   /**
@@ -987,7 +987,7 @@ public class DOM2DTM extends DTMDefaultBaseIterators
 //        {
     int id = makeNodeIdentity(nodeHandle);
     if (NULL == id) { return null; }
-    Node newnode = (Node)m_nodes.get(id);
+    Node newnode = m_nodes.get(id);
     String newname = newnode.getLocalName();
     if (null == newname) {
       // XSLT treats PIs, and possibly other things, as having QNames.
@@ -1102,7 +1102,7 @@ public class DOM2DTM extends DTMDefaultBaseIterators
 //        {
     int id = makeNodeIdentity(nodeHandle);
     if (id == NULL) { return null; }
-    Node node = (Node)m_nodes.get(id);
+    Node node = m_nodes.get(id);
     return node.getNamespaceURI();
 //        }
 //        else
@@ -1188,7 +1188,7 @@ public class DOM2DTM extends DTMDefaultBaseIterators
   getNodeValue(int nodeHandle)
   {
     // The _type(nodeHandle) call was taking the lion's share of our
-    // time, and was wrong anyway since it wasn't coverting handle to
+    // time, and was wrong anyway since it wasn't converting handle to
     // identity. Inlined it.
     int type = _exptype(makeNodeIdentity(nodeHandle));
     type = (NULL != type) ? getNodeType(nodeHandle) : NULL;
@@ -1436,7 +1436,7 @@ public class DOM2DTM extends DTMDefaultBaseIterators
   /** Bind an IncrementalSAXSource to this DTM. NOT RELEVANT for DOM2DTM, since
    * we're wrapped around an existing DOM.
    *
-   * @param source The IncrementalSAXSource that we want to recieve events from
+   * @param source The IncrementalSAXSource that we want to receive events from
    * on demand.
    */
   public void
@@ -1450,7 +1450,7 @@ public class DOM2DTM extends DTMDefaultBaseIterators
    *
    * @return null if this model doesn't respond to SAX events,
    * "this" if the DTM object has a built-in SAX ContentHandler,
-   * the IncrmentalSAXSource if we're bound to one and should receive
+   * the IncrementalSAXSource if we're bound to one and should receive
    * the SAX stream via it for incremental build purposes...
    * */
   public org.xml.sax.ContentHandler
@@ -1462,7 +1462,7 @@ public class DOM2DTM extends DTMDefaultBaseIterators
   /**
    * Return this DTM's lexical handler.
    *
-   * %REVIEW% Should this return null if constrution already done/begun?
+   * %REVIEW% Should this return null if construction already done/begun?
    *
    * @return null if this model doesn't respond to lexical SAX events,
    * "this" if the DTM object has a built-in SAX ContentHandler,
@@ -1608,6 +1608,7 @@ public class DOM2DTM extends DTMDefaultBaseIterators
    * @param node Node whose subtree is to be walked, gathering the
    * contents of all Text or CDATASection nodes.
    */
+  @SuppressWarnings("fallthrough")
   protected static void
   dispatchNodeData(Node node,
                    org.xml.sax.ContentHandler ch,

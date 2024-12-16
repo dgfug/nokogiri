@@ -1,5 +1,6 @@
 # encoding: utf-8
 # frozen_string_literal: true
+
 require "helper"
 
 class TestHtml5Nokogumbo < Nokogiri::TestCase
@@ -15,7 +16,7 @@ class TestHtml5Nokogumbo < Nokogiri::TestCase
 
   def test_element_cdata_script
     doc = Nokogiri::HTML5.fragment(buffer)
-    assert_equal(true, doc.document.html?)
+    assert_predicate(doc.document, :html?)
     assert_equal("<script> if (a < b) alert(1) </script>", doc.at("script").to_s)
   end
 
@@ -140,8 +141,10 @@ class TestHtml5Nokogumbo < Nokogiri::TestCase
     html = '<label><input checked type="checkbox" disabled name="cheese"> Cheese</label>'
 
     doc = Nokogiri::HTML5(html, max_attributes: 4)
-    assert_equal({ "checked" => "", "type" => "checkbox", "disabled" => "", "name" => "cheese" },
-      attributes(doc.at_css("input")))
+    assert_equal(
+      { "checked" => "", "type" => "checkbox", "disabled" => "", "name" => "cheese" },
+      attributes(doc.at_css("input")),
+    )
 
     assert_raises(ArgumentError) { Nokogiri::HTML5(html, max_attributes: 3) }
     assert_raises(ArgumentError) { Nokogiri::HTML5(html, max_attributes: 2) }
@@ -150,8 +153,12 @@ class TestHtml5Nokogumbo < Nokogiri::TestCase
   end
 
   def test_default_max_attributes
-    a = String.new("a")
-    attrs = 50_000.times.map { x = a.dup; a.succ!; x }
+    a = +"a"
+    attrs = Array.new(50_000) do
+      x = a.dup
+      a.succ!
+      x
+    end
 
     # <div> contains 50,000 attributes, but default limit is 400. Parsing this would take ages if
     # we were not enforcing any limit on attributes. All attributes are duplicated to make sure
@@ -179,8 +186,12 @@ class TestHtml5Nokogumbo < Nokogiri::TestCase
   end
 
   def test_fragment_default_max_attributes
-    a = String.new("a")
-    attrs = 50_000.times.map { x = a.dup; a.succ!; x }
+    a = +"a"
+    attrs = Array.new(50_000) do
+      x = a.dup
+      a.succ!
+      x
+    end
 
     # <div> contains 50,000 attributes, but default limit is 400. Parsing this would take ages if
     # we were not enforcing any limit on attributes. All attributes are duplicated to make sure
@@ -194,19 +205,27 @@ class TestHtml5Nokogumbo < Nokogiri::TestCase
     assert_raises(ArgumentError) { Nokogiri::HTML5.fragment(html) }
   end
 
+  TWO_ERROR_DOC = "<!DOCTYPE html><html><!-- <!-- --></a>"
+
   def test_parse_errors
-    doc = Nokogiri::HTML5("<!DOCTYPE html><html><!-- <!-- --></a>", max_errors: 10)
-    assert_equal(doc.errors.length, 2)
+    doc = Nokogiri::HTML5(TWO_ERROR_DOC, max_errors: 10)
+    assert_equal(2, doc.errors.length)
     doc = Nokogiri::HTML5("<!DOCTYPE html><html>", max_errors: 10)
     assert_empty(doc.errors)
   end
 
   def test_max_errors
     # This document contains 2 parse errors, but we force limit to 1.
-    doc = Nokogiri::HTML5("<!DOCTYPE html><html><!-- -- --></a>", max_errors: 1)
+    doc = Nokogiri::HTML5(TWO_ERROR_DOC, max_errors: 1)
     assert_equal(1, doc.errors.length)
     doc = Nokogiri::HTML5("<!DOCTYPE html><html>", max_errors: 1)
     assert_empty(doc.errors)
+  end
+
+  def test_max_errors_with_config_block
+    # This document contains 2 parse errors, but we force limit to 1.
+    doc = Nokogiri::HTML5(TWO_ERROR_DOC) { |c| c[:max_errors] = 1 }
+    assert_equal(1, doc.errors.length)
   end
 
   def test_default_max_errors
@@ -236,15 +255,15 @@ class TestHtml5Nokogumbo < Nokogiri::TestCase
   end
 
   def test_default_max_depth_parse
+    depth = Nokogiri::Gumbo::DEFAULT_MAX_TREE_DEPTH + 1
     assert_raises(ArgumentError) do
-      depth = Nokogiri::Gumbo::DEFAULT_MAX_TREE_DEPTH + 1
       Nokogiri::HTML5("<!DOCTYPE html><html><body>" + "<div>" * (depth - 2))
     end
   end
 
   def test_default_max_depth_fragment
+    depth = Nokogiri::Gumbo::DEFAULT_MAX_TREE_DEPTH + 1
     assert_raises(ArgumentError) do
-      depth = Nokogiri::Gumbo::DEFAULT_MAX_TREE_DEPTH + 1
       Nokogiri::HTML5.fragment("<div>" * depth)
     end
   end
@@ -256,12 +275,8 @@ class TestHtml5Nokogumbo < Nokogiri::TestCase
       Nokogiri::HTML5(html, max_tree_depth: depth - 1)
     end
 
-    begin
-      Nokogiri::HTML5(html, max_tree_depth: depth)
-      pass
-    rescue ArgumentError
-      flunk("Expected document parse to succeed")
-    end
+    assert(Nokogiri::HTML5(html, max_tree_depth: depth))
+    assert(Nokogiri::HTML5(html, max_tree_depth: -1))
   end
 
   def test_max_depth_fragment
@@ -271,12 +286,8 @@ class TestHtml5Nokogumbo < Nokogiri::TestCase
       Nokogiri::HTML5.fragment(html, max_tree_depth: depth - 1)
     end
 
-    begin
-      Nokogiri::HTML5.fragment(html, max_tree_depth: depth)
-      pass
-    rescue ArgumentError
-      flunk("Expected fragment parse to succeed")
-    end
+    assert(Nokogiri::HTML5.fragment(html, max_tree_depth: depth))
+    assert(Nokogiri::HTML5.fragment(html, max_tree_depth: -1))
   end
 
   def test_document_encoding
@@ -319,8 +330,31 @@ class TestHtml5Nokogumbo < Nokogiri::TestCase
     html = "<!DOCTYPE html>\n<svg>\n<script><![CDATA[ ]]></script></svg>"
     doc = Nokogiri.HTML5(html)
     node = doc.at_xpath("/html/body/svg:svg/svg:script/text()")
-    assert(node.cdata?)
+    assert_predicate(node, :cdata?)
     assert_equal(3, node.line)
+  end
+
+  it "handles ill-formed processing instructions in a document" do
+    html = %{<html><body><!--><?a/}
+    doc = Nokogiri::HTML5::Document.parse(html)
+    expected = [Nokogiri::XML::Node::COMMENT_NODE, Nokogiri::XML::Node::COMMENT_NODE]
+    assert_equal(expected, doc.at_css("body").children.map(&:type))
+  end
+
+  it "handles ill-formed processing instructions in a fragment" do
+    html = %{<div><!--><?a/}
+    frag = Nokogiri::HTML5::DocumentFragment.parse(html)
+    expected = [Nokogiri::XML::Node::COMMENT_NODE, Nokogiri::XML::Node::COMMENT_NODE]
+    assert_equal(expected, frag.at_css("div").children.map(&:type))
+  end
+
+  it "raises an exception if an unexpected kwarg is provided" do
+    assert_raises(ArgumentError) do
+      Nokogiri::HTML5::Document.parse("<p>", foo: "bar")
+    end
+    assert_raises(ArgumentError) do
+      Nokogiri::HTML5::DocumentFragment.parse("<p>", Encoding::UTF_8, foo: "bar")
+    end
   end
 
   private
@@ -348,6 +382,6 @@ class TestHtml5Nokogumbo < Nokogiri::TestCase
   end
 
   def attributes(element)
-    element.attributes.map { |name, attribute| [name, attribute.value] }.to_h
+    element.attributes.to_h { |name, attribute| [name, attribute.value] }
   end
 end if Nokogiri.uses_gumbo?

@@ -1,10 +1,16 @@
+# coding: utf-8
 # frozen_string_literal: true
+
 module Nokogiri
   module XML
     ####
-    # A NodeSet contains a list of Nokogiri::XML::Node objects.  Typically
-    # a NodeSet is return as a result of searching a Document via
-    # Nokogiri::XML::Searchable#css or Nokogiri::XML::Searchable#xpath
+    # A NodeSet is an Enumerable that contains a list of Nokogiri::XML::Node objects.
+    #
+    # Typically a NodeSet is returned as a result of searching a Document via
+    # Nokogiri::XML::Searchable#css or Nokogiri::XML::Searchable#xpath.
+    #
+    # Note that the `#dup` and `#clone` methods perform shallow copies; these methods do not copy
+    # the Nodes contained in the NodeSet (similar to how Array and other Enumerable classes work).
     class NodeSet
       include Nokogiri::XML::Searchable
       include Enumerable
@@ -12,10 +18,8 @@ module Nokogiri
       # The Document this NodeSet is associated with
       attr_accessor :document
 
-      alias :clone :dup
-
       # Create a NodeSet with +document+ defaulting to +list+
-      def initialize document, list = []
+      def initialize(document, list = [])
         @document = document
         document.decorate(self)
         list.each { |x| self << x }
@@ -24,8 +28,9 @@ module Nokogiri
 
       ###
       # Get the first element of the NodeSet.
-      def first n = nil
+      def first(n = nil)
         return self[0] unless n
+
         list = []
         [n, length].min.times { |i| list << self[i] }
         list
@@ -47,7 +52,7 @@ module Nokogiri
       # Returns the index of the first node in self that is == to +node+ or meets the given block. Returns nil if no match is found.
       def index(node = nil)
         if node
-          warn "given block not used" if block_given?
+          warn("given block not used") if block_given?
           each_with_index { |member, j| return j if member == node }
         elsif block_given?
           each_with_index { |member, j| return j if yield(member) }
@@ -57,18 +62,18 @@ module Nokogiri
 
       ###
       # Insert +datum+ before the first Node in this NodeSet
-      def before datum
-        first.before datum
+      def before(datum)
+        first.before(datum)
       end
 
       ###
       # Insert +datum+ after the last Node in this NodeSet
-      def after datum
-        last.after datum
+      def after(datum)
+        last.after(datum)
       end
 
-      alias :<< :push
-      alias :remove :unlink
+      alias_method :<<, :push
+      alias_method :remove, :unlink
 
       ###
       # call-seq: css *rules, [namespace-bindings, custom-pseudo-class]
@@ -77,7 +82,7 @@ module Nokogiri
       # selectors. For example:
       #
       # For more information see Nokogiri::XML::Searchable#css
-      def css *args
+      def css(*args)
         rules, handler, ns, _ = extract_params(args)
         paths = css_rules_to_xpath(rules, ns)
 
@@ -93,19 +98,12 @@ module Nokogiri
       # queries.
       #
       # For more information see Nokogiri::XML::Searchable#xpath
-      def xpath *args
+      def xpath(*args)
         paths, handler, ns, binds = extract_params(args)
 
         inject(NodeSet.new(document)) do |set, node|
           set + xpath_internal(node, paths, handler, ns, binds)
         end
-      end
-
-      ###
-      # Search this NodeSet's nodes' immediate children using CSS selector +selector+
-      def > selector
-        ns = document.root.namespaces
-        xpath CSS.xpath_for(selector, :prefix => "./", :ns => ns).first
       end
 
       ###
@@ -120,18 +118,18 @@ module Nokogiri
       #
       #   node_set.at(3) # same as node_set[3]
       #
-      def at *args
+      def at(*args)
         if args.length == 1 && args.first.is_a?(Numeric)
           return self[args.first]
         end
 
-        super(*args)
+        super
       end
-      alias :% :at
+      alias_method :%, :at
 
       ###
       # Filter this list for nodes that match +expr+
-      def filter expr
+      def filter(expr)
         find_all { |node| node.matches?(expr) }
       end
 
@@ -140,7 +138,7 @@ module Nokogiri
       # NodeSet.
       #
       # See Nokogiri::XML::Node#add_class for more information.
-      def add_class name
+      def add_class(name)
         each do |el|
           el.add_class(name)
         end
@@ -152,7 +150,7 @@ module Nokogiri
       # NodeSet.
       #
       # See Nokogiri::XML::Node#append_class for more information.
-      def append_class name
+      def append_class(name)
         each do |el|
           el.append_class(name)
         end
@@ -164,7 +162,7 @@ module Nokogiri
       # NodeSet.
       #
       # See Nokogiri::XML::Node#remove_class for more information.
-      def remove_class name = nil
+      def remove_class(name = nil)
         each do |el|
           el.remove_class(name)
         end
@@ -204,31 +202,31 @@ module Nokogiri
       #
       #   node_set.attr("class") { |node| node.name }
       #
-      def attr key, value = nil, &block
+      def attr(key, value = nil, &block)
         unless key.is_a?(Hash) || (key && (value || block))
-          return first ? first.attribute(key) : nil
+          return first&.attribute(key)
         end
 
         hash = key.is_a?(Hash) ? key : { key => value }
 
-        hash.each do |k,v|
+        hash.each do |k, v|
           each do |node|
-            node[k] = v || block.call(node)
+            node[k] = v || yield(node)
           end
         end
 
         self
       end
-      alias :set :attr
-      alias :attribute :attr
+      alias_method :set, :attr
+      alias_method :attribute, :attr
 
       ###
       # Remove the attributed named +name+ from all Node objects in the NodeSet
-      def remove_attr name
-        each { |el| el.delete name }
+      def remove_attr(name)
+        each { |el| el.delete(name) }
         self
       end
-      alias remove_attribute remove_attr
+      alias_method :remove_attribute, :remove_attr
 
       ###
       # Iterate over each node, yielding  to +block+
@@ -255,20 +253,83 @@ module Nokogiri
       #
       # See Nokogiri::XML::Node#content for more information.
       def inner_text
-        collect(&:inner_text).join('')
+        collect(&:inner_text).join("")
       end
-      alias :text :inner_text
+      alias_method :text, :inner_text
 
       ###
       # Get the inner html of all contained Node objects
-      def inner_html *args
-        collect{|j| j.inner_html(*args) }.join('')
+      def inner_html(*args)
+        collect { |j| j.inner_html(*args) }.join("")
       end
 
-      ###
-      # Wrap this NodeSet with +html+
-      def wrap html
-        map { |node| node.wrap html }
+      # :call-seq:
+      #   wrap(markup) -> self
+      #   wrap(node) -> self
+      #
+      # Wrap each member of this NodeSet with the node parsed from +markup+ or a dup of the +node+.
+      #
+      # [Parameters]
+      # - *markup* (String)
+      #   Markup that is parsed, once per member of the NodeSet, and used as the wrapper. Each
+      #   node's parent, if it exists, is used as the context node for parsing; otherwise the
+      #   associated document is used. If the parsed fragment has multiple roots, the first root
+      #   node is used as the wrapper.
+      # - *node* (Nokogiri::XML::Node)
+      #   An element that is `#dup`ed and used as the wrapper.
+      #
+      # [Returns] +self+, to support chaining.
+      #
+      # ⚠ Note that if a +String+ is passed, the markup will be parsed <b>once per node</b> in the
+      # NodeSet. You can avoid this overhead in cases where you know exactly the wrapper you wish to
+      # use by passing a +Node+ instead.
+      #
+      # Also see Node#wrap
+      #
+      # *Example* with a +String+ argument:
+      #
+      #   doc = Nokogiri::HTML5(<<~HTML)
+      #     <html><body>
+      #       <a>a</a>
+      #       <a>b</a>
+      #       <a>c</a>
+      #       <a>d</a>
+      #     </body></html>
+      #   HTML
+      #   doc.css("a").wrap("<div></div>")
+      #   doc.to_html
+      #   # => <html><head></head><body>
+      #   #      <div><a>a</a></div>
+      #   #      <div><a>b</a></div>
+      #   #      <div><a>c</a></div>
+      #   #      <div><a>d</a></div>
+      #   #    </body></html>
+      #
+      # *Example* with a +Node+ argument
+      #
+      # 💡 Note that this is faster than the equivalent call passing a +String+ because it avoids
+      # having to reparse the wrapper markup for each node.
+      #
+      #   doc = Nokogiri::HTML5(<<~HTML)
+      #     <html><body>
+      #       <a>a</a>
+      #       <a>b</a>
+      #       <a>c</a>
+      #       <a>d</a>
+      #     </body></html>
+      #   HTML
+      #   doc.css("a").wrap(doc.create_element("div"))
+      #   doc.to_html
+      #   # => <html><head></head><body>
+      #   #      <div><a>a</a></div>
+      #   #      <div><a>b</a></div>
+      #   #      <div><a>c</a></div>
+      #   #      <div><a>d</a></div>
+      #   #    </body></html>
+      #
+      def wrap(node_or_tags)
+        map { |node| node.wrap(node_or_tags) }
+        self
       end
 
       ###
@@ -279,55 +340,62 @@ module Nokogiri
 
       ###
       # Convert this NodeSet to HTML
-      def to_html *args
+      def to_html(*args)
         if Nokogiri.jruby?
           options = args.first.is_a?(Hash) ? args.shift : {}
-          if !options[:save_with]
-            options[:save_with] = Node::SaveOptions::NO_DECLARATION | Node::SaveOptions::NO_EMPTY_TAGS | Node::SaveOptions::AS_HTML
-          end
+          options[:save_with] ||= Node::SaveOptions::DEFAULT_HTML
           args.insert(0, options)
         end
-        map { |x| x.to_html(*args) }.join
+        if empty?
+          encoding = (args.first.is_a?(Hash) ? args.first[:encoding] : nil)
+          encoding ||= document.encoding
+          encoding.nil? ? "" : "".encode(encoding)
+        else
+          map { |x| x.to_html(*args) }.join
+        end
       end
 
       ###
       # Convert this NodeSet to XHTML
-      def to_xhtml *args
+      def to_xhtml(*args)
         map { |x| x.to_xhtml(*args) }.join
       end
 
       ###
       # Convert this NodeSet to XML
-      def to_xml *args
+      def to_xml(*args)
         map { |x| x.to_xml(*args) }.join
       end
 
-      alias :size :length
-      alias :to_ary :to_a
+      alias_method :size, :length
+      alias_method :to_ary, :to_a
 
       ###
       # Removes the last element from set and returns it, or +nil+ if
       # the set is empty
       def pop
-        return nil if length == 0
-        delete last
+        return if length == 0
+
+        delete(last)
       end
 
       ###
       # Returns the first element of the NodeSet and removes it.  Returns
       # +nil+ if the set is empty.
       def shift
-        return nil if length == 0
-        delete first
+        return if length == 0
+
+        delete(first)
       end
 
       ###
       # Equality -- Two NodeSets are equal if the contain the same number
       # of elements and if each element is equal to the corresponding
       # element in the other NodeSet
-      def == other
+      def ==(other)
         return false unless other.is_a?(Nokogiri::XML::NodeSet)
         return false unless length == other.length
+
         each_with_index do |node, i|
           return false unless node == other[i]
         end
@@ -351,22 +419,31 @@ module Nokogiri
       def reverse
         node_set = NodeSet.new(document)
         (length - 1).downto(0) do |x|
-          node_set.push self[x]
+          node_set.push(self[x])
         end
         node_set
       end
 
       ###
-      # Return a nicely formated string representation
+      # Return a nicely formatted string representation
       def inspect
-        "[#{map(&:inspect).join ', '}]"
+        "[#{map(&:inspect).join(", ")}]"
       end
 
-      alias :+ :|
+      alias_method :+, :|
 
-      # @private
-      IMPLIED_XPATH_CONTEXTS = [ './/'.freeze, 'self::'.freeze ].freeze # :nodoc:
+      #
+      #  :call-seq: deconstruct() → Array
+      #
+      #  Returns the members of this NodeSet as an array, to use in pattern matching.
+      #
+      #  Since v1.14.0
+      #
+      def deconstruct
+        to_a
+      end
 
+      IMPLIED_XPATH_CONTEXTS = [".//", "self::"].freeze # :nodoc:
     end
   end
 end

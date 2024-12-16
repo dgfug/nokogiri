@@ -25,6 +25,7 @@ import org.w3c.dom.Text;
 @JRubyClass(name = "Nokogiri::XML::Text", parent = "Nokogiri::XML::CharacterData")
 public class XmlText extends XmlNode
 {
+  private static final long serialVersionUID = 1L;
 
   private static final ByteList TEXT = ByteList.create("text");
   static { TEXT.setEncoding(USASCIIEncoding.INSTANCE); }
@@ -50,9 +51,17 @@ public class XmlText extends XmlNode
     }
 
     content = args[0];
-    IRubyObject xNode = args[1];
+    IRubyObject rbDocument = args[1];
 
-    Document document = asXmlNode(context, xNode).getOwnerDocument();
+    if (!(rbDocument instanceof XmlNode)) {
+      String msg = "expected second parameter to be a Nokogiri::XML::Document, received " + rbDocument.getMetaClass();
+      throw context.runtime.newTypeError(msg);
+    }
+    if (!(rbDocument instanceof XmlDocument)) {
+      context.runtime.getWarnings().warn("Passing a Node as the second parameter to Text.new is deprecated. Please pass a Document instead. This will become an error in Nokogiri v1.17.0."); // TODO: deprecated in v1.15.3, remove in v1.17.0
+    }
+
+    Document document = asXmlNode(context, rbDocument).getOwnerDocument();
     // text node content should not be encoded when it is created by Text node.
     // while content should be encoded when it is created by Element node.
     Node node = document.createTextNode(rubyStringToString(content));

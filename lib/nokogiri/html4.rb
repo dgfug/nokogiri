@@ -1,27 +1,28 @@
+# coding: utf-8
 # frozen_string_literal: true
+
 module Nokogiri
   class << self
-    ###
-    # Parse HTML. Convenience method for Nokogiri::HTML4::Document.parse
-    def HTML4(input, url = nil, encoding = nil, options = XML::ParseOptions::DEFAULT_HTML, &block)
-      Nokogiri::HTML4::Document.parse(input, url, encoding, options, &block)
+    # Convenience method for Nokogiri::HTML4::Document.parse
+    def HTML4(...)
+      Nokogiri::HTML4::Document.parse(...)
     end
   end
 
-  # @since v1.12.0
-  # @note Before v1.12.0, {Nokogiri::HTML4} did not exist, and {Nokogiri::HTML} was the module/namespace for parsing HTML.
+  # Since v1.12.0
+  #
+  # 💡 Before v1.12.0, Nokogiri::HTML4 did not exist, and Nokogiri::HTML was the module/namespace
+  # for parsing HTML.
   module HTML4
     class << self
-      ###
-      # Parse HTML. Convenience method for Nokogiri::HTML4::Document.parse
-      def parse(input, url = nil, encoding = nil, options = XML::ParseOptions::DEFAULT_HTML, &block)
-        Document.parse(input, url, encoding, options, &block)
+      # Convenience method for Nokogiri::HTML4::Document.parse
+      def parse(...)
+        Document.parse(...)
       end
 
-      ####
-      # Parse a fragment from +string+ in to a NodeSet.
-      def fragment(string, encoding = nil)
-        HTML4::DocumentFragment.parse(string, encoding)
+      # Convenience method for Nokogiri::HTML4::DocumentFragment.parse
+      def fragment(...)
+        HTML4::DocumentFragment.parse(...)
       end
     end
 
@@ -33,6 +34,7 @@ end
 require_relative "html4/entity_lookup"
 require_relative "html4/document"
 require_relative "html4/document_fragment"
+require_relative "html4/encoding_reader"
 require_relative "html4/sax/parser_context"
 require_relative "html4/sax/parser"
 require_relative "html4/sax/push_parser"

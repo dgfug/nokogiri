@@ -57,6 +57,7 @@ import nokogiri.internals.ReaderNode.TextNode;
 @JRubyClass(name = "Nokogiri::XML::Reader")
 public class XmlReader extends RubyObject
 {
+  private static final long serialVersionUID = 1L;
 
   private static final int XML_TEXTREADER_MODE_INITIAL = 0;
   private static final int XML_TEXTREADER_MODE_INTERACTIVE = 1;
@@ -139,9 +140,9 @@ public class XmlReader extends RubyObject
 
   @JRubyMethod
   public IRubyObject
-  attribute_nodes(ThreadContext context)
+  attribute_hash(ThreadContext context)
   {
-    return currentNode().getAttributesNodes();
+    return currentNode().getAttributes(context);
   }
 
   @JRubyMethod(name = "attributes?")
@@ -184,6 +185,18 @@ public class XmlReader extends RubyObject
     return RubyBoolean.newBoolean(context.getRuntime(), !readerNode.hasChildren);
   }
 
+  @JRubyMethod
+  public IRubyObject
+  encoding(ThreadContext context)
+  {
+    IRubyObject constructor_encoding = getInstanceVariable("@encoding");
+    if (!constructor_encoding.isNil()) {
+      return constructor_encoding;
+    }
+    // TODO: get the parser's detected encoding
+    return context.getRuntime().getNil();
+  }
+
   @JRubyMethod(meta = true, rest = true)
   public static IRubyObject
   from_io(ThreadContext context, IRubyObject cls, IRubyObject args[])
@@ -204,7 +217,7 @@ public class XmlReader extends RubyObject
 
     Options options;
     if (args.length > 3) {
-      options = new ParserContext.Options((Long)args[3].toJava(Long.class));
+      options = new ParserContext.Options(args[3].toJava(Long.class));
     } else {
       // use the default options RECOVER | NONET
       options = new ParserContext.Options(2048 | 1);
@@ -235,7 +248,7 @@ public class XmlReader extends RubyObject
 
     Options options;
     if (args.length > 3) {
-      options = new ParserContext.Options((Long)args[3].toJava(Long.class));
+      options = new ParserContext.Options(args[3].toJava(Long.class));
     } else {
       // use the default options RECOVER | NONET
       options = new ParserContext.Options(2048 | 1);
@@ -383,7 +396,7 @@ public class XmlReader extends RubyObject
     final ReaderNode currentNode = currentNode();
     if (currentNode == null) { return runtime.getNil(); }
     if (currentNode.isError()) {
-      RubyArray errors = (RubyArray) getInstanceVariable("@errors");
+      RubyArray<?> errors = (RubyArray) getInstanceVariable("@errors");
       IRubyObject error = currentNode.toSyntaxError();
       errors.append(error);
       setInstanceVariable("@errors", errors);

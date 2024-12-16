@@ -1,10 +1,14 @@
 package nokogiri;
 
 import nokogiri.internals.*;
+import static nokogiri.internals.NokogiriHelpers.rubyStringToString;
+
 import org.apache.xerces.parsers.AbstractSAXParser;
 import org.jruby.Ruby;
 import org.jruby.RubyClass;
+import org.jruby.RubyEncoding;
 import org.jruby.RubyFixnum;
+import org.jruby.RubyString;
 import org.jruby.anno.JRubyClass;
 import org.jruby.anno.JRubyMethod;
 import org.jruby.exceptions.RaiseException;
@@ -14,6 +18,7 @@ import org.jruby.runtime.builtin.IRubyObject;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -28,6 +33,7 @@ import static org.jruby.runtime.Helpers.invoke;
 @JRubyClass(name = "Nokogiri::XML::SAX::ParserContext")
 public class XmlSaxParserContext extends ParserContext
 {
+  private static final long serialVersionUID = 1L;
 
   protected static final String FEATURE_NAMESPACES =
     "http://xml.org/sax/features/namespaces";
@@ -42,7 +48,7 @@ public class XmlSaxParserContext extends ParserContext
 
   protected NokogiriHandler handler;
   protected NokogiriErrorHandler errorHandler;
-  private boolean replaceEntities = true;
+  private boolean replaceEntities = false;
   private boolean recovery = false;
 
   public
@@ -89,16 +95,26 @@ public class XmlSaxParserContext extends ParserContext
    * Create a new parser context that will parse the string
    * <code>data</code>.
    */
-  @JRubyMethod(name = "memory", meta = true)
+  @JRubyMethod(name = "native_memory", meta = true)
   public static IRubyObject
-  parse_memory(ThreadContext context,
-               IRubyObject klazz,
-               IRubyObject data)
+  parse_memory(ThreadContext context, IRubyObject klazz, IRubyObject data, IRubyObject encoding)
   {
-    final Ruby runtime = context.runtime;
-    XmlSaxParserContext ctx = newInstance(runtime, (RubyClass) klazz);
-    ctx.initialize(runtime);
-    ctx.setStringInputSource(context, data, runtime.getNil());
+    String java_encoding = null;
+    if (encoding != context.runtime.getNil()) {
+      if (!(encoding instanceof RubyEncoding)) {
+        throw context.runtime.newTypeError("encoding must be kind_of Encoding");
+      }
+      java_encoding = ((RubyEncoding)encoding).toString();
+    }
+
+    XmlSaxParserContext ctx = newInstance(context.runtime, (RubyClass) klazz);
+    ctx.initialize(context.runtime);
+    ctx.setStringInputSourceNoEnc(context, data, context.runtime.getNil());
+
+    if (java_encoding != null) {
+      ctx.getInputSource().setEncoding(java_encoding);
+    }
+
     return ctx;
   }
 
@@ -106,16 +122,26 @@ public class XmlSaxParserContext extends ParserContext
    * Create a new parser context that will read from the file
    * <code>data</code> and parse.
    */
-  @JRubyMethod(name = "file", meta = true)
+  @JRubyMethod(name = "native_file", meta = true)
   public static IRubyObject
-  parse_file(ThreadContext context,
-             IRubyObject klazz,
-             IRubyObject data)
+  parse_file(ThreadContext context, IRubyObject klazz, IRubyObject data, IRubyObject encoding)
   {
-    final Ruby runtime = context.runtime;
-    XmlSaxParserContext ctx = newInstance(runtime, (RubyClass) klazz);
-    ctx.initialize(context.getRuntime());
+    String java_encoding = null;
+    if (encoding != context.runtime.getNil()) {
+      if (!(encoding instanceof RubyEncoding)) {
+        throw context.runtime.newTypeError("encoding must be kind_of Encoding");
+      }
+      java_encoding = ((RubyEncoding)encoding).toString();
+    }
+
+    XmlSaxParserContext ctx = newInstance(context.runtime, (RubyClass) klazz);
+    ctx.initialize(context.runtime);
     ctx.setInputSourceFile(context, data);
+
+    if (java_encoding != null) {
+      ctx.getInputSource().setEncoding(java_encoding);
+    }
+
     return ctx;
   }
 
@@ -125,18 +151,30 @@ public class XmlSaxParserContext extends ParserContext
    *
    * TODO: Currently ignores encoding <code>enc</code>.
    */
-  @JRubyMethod(name = "io", meta = true)
+  @JRubyMethod(name = "native_io", meta = true)
   public static IRubyObject
-  parse_io(ThreadContext context,
-           IRubyObject klazz,
-           IRubyObject data,
-           IRubyObject enc)
+  parse_io(ThreadContext context, IRubyObject klazz, IRubyObject data, IRubyObject encoding)
   {
-    //int encoding = (int)enc.convertToInteger().getLongValue();
-    final Ruby runtime = context.runtime;
-    XmlSaxParserContext ctx = newInstance(runtime, (RubyClass) klazz);
-    ctx.initialize(runtime);
-    ctx.setIOInputSource(context, data, runtime.getNil());
+    if (!invoke(context, data, "respond_to?", context.runtime.newSymbol("read")).isTrue()) {
+      throw context.runtime.newTypeError("argument expected to respond to :read");
+    }
+
+    String java_encoding = null;
+    if (encoding != context.runtime.getNil()) {
+      if (!(encoding instanceof RubyEncoding)) {
+        throw context.runtime.newTypeError("encoding must be kind_of Encoding");
+      }
+      java_encoding = ((RubyEncoding)encoding).toString();
+    }
+
+    XmlSaxParserContext ctx = newInstance(context.runtime, (RubyClass) klazz);
+    ctx.initialize(context.runtime);
+    ctx.setIOInputSource(context, data, context.runtime.getNil());
+
+    if (java_encoding != null) {
+      ctx.getInputSource().setEncoding(java_encoding);
+    }
+
     return ctx;
   }
 
@@ -218,9 +256,12 @@ public class XmlSaxParserContext extends ParserContext
 
     /* TODO: how should we pass in parse options? */
     ParserContext.Options options = defaultParseOptions(context);
+    if (replaceEntities) {
+      options.noEnt = true;
+    }
 
     errorHandler = new NokogiriStrictErrorHandler(runtime, options.noError, options.noWarning);
-    handler = new NokogiriHandler(runtime, handlerRuby, errorHandler);
+    handler = new NokogiriHandler(runtime, handlerRuby, errorHandler, options.noEnt);
 
     preParse(runtime, handlerRuby, handler);
     parser.setContentHandler(handler);
@@ -229,6 +270,7 @@ public class XmlSaxParserContext extends ParserContext
 
     try {
       parser.setProperty("http://xml.org/sax/properties/lexical-handler", handler);
+      parser.setProperty("http://xml.org/sax/properties/declaration-handler", handler);
     } catch (Exception ex) {
       throw runtime.newRuntimeError("Problem while creating XML SAX Parser: " + ex.toString());
     }
@@ -237,16 +279,15 @@ public class XmlSaxParserContext extends ParserContext
       try {
         do_parse();
       } catch (SAXParseException ex) {
-        // A bad document (<foo><bar></foo>) should call the
-        // error handler instead of raising a SAX exception.
-
-        // However, an EMPTY document should raise a RuntimeError.
-        // This is a bit kludgy, but AFAIK SAX doesn't distinguish
-        // between empty and bad whereas Nokogiri does.
+        // An EMPTY document should raise a RuntimeError. This is a bit kludgy, but AFAIK SAX
+        // doesn't distinguish between empty and bad whereas Nokogiri does.
         String message = ex.getMessage();
         if (message != null && message.contains("Premature end of file.") && stringDataSize < 1) {
-          throw runtime.newRuntimeError("couldn't parse document: " + message);
+          throw runtime.newRuntimeError("input string cannot be empty");
         }
+
+        // A bad document (<foo><bar></foo>) should call the
+        // error handler instead of raising a SAX exception.
         handler.error(ex);
       }
     } catch (SAXException ex) {

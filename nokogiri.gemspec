@@ -8,7 +8,7 @@ rescue LoadError
 end
 
 Gem::Specification.new do |spec|
-  java_p = /java/ === RUBY_PLATFORM
+  java_p = RUBY_PLATFORM.include?("java")
 
   spec.name = "nokogiri"
   spec.version = defined?(Nokogiri::VERSION) ? Nokogiri::VERSION : "0.0.0"
@@ -17,7 +17,7 @@ Gem::Specification.new do |spec|
   spec.description = <<~EOF
     Nokogiri (鋸) makes it easy and painless to work with XML and HTML from Ruby. It provides a
     sensible, easy-to-understand API for reading, writing, modifying, and querying documents. It is
-    fast and standards-compliant by relying on native parsers like libxml2 (C) and xerces (Java).
+    fast and standards-compliant by relying on native parsers like libxml2, libgumbo, or xerces.
   EOF
 
   spec.authors = [
@@ -40,7 +40,7 @@ Gem::Specification.new do |spec|
 
   spec.license = "MIT"
 
-  spec.required_ruby_version = ">= 2.5.0"
+  spec.required_ruby_version = ">= 3.1.0"
 
   spec.homepage = "https://nokogiri.org"
   spec.metadata = {
@@ -49,6 +49,7 @@ Gem::Specification.new do |spec|
     "documentation_uri" => "https://nokogiri.org/rdoc/index.html",
     "changelog_uri" => "https://nokogiri.org/CHANGELOG.html",
     "source_code_uri" => "https://github.com/sparklemotion/nokogiri",
+    "rubygems_mfa_required" => "true",
   }
 
   spec.files = [
@@ -58,7 +59,6 @@ Gem::Specification.new do |spec|
     "README.md",
     "bin/nokogiri",
     "dependencies.yml",
-    "ext/java/nokogiri/EncodingHandler.java",
     "ext/java/nokogiri/Html4Document.java",
     "ext/java/nokogiri/Html4ElementDescription.java",
     "ext/java/nokogiri/Html4EntityLookup.java",
@@ -141,7 +141,7 @@ Gem::Specification.new do |spec|
     "ext/java/nokogiri/internals/c14n/InvalidCanonicalizerException.java",
     "ext/java/nokogiri/internals/c14n/NameSpaceSymbTable.java",
     "ext/java/nokogiri/internals/c14n/NodeFilter.java",
-    "ext/java/nokogiri/internals/c14n/UtfHelpper.java",
+    "ext/java/nokogiri/internals/c14n/UtfHelper.java",
     "ext/java/nokogiri/internals/c14n/XMLUtils.java",
     "ext/java/nokogiri/internals/dom2dtm/DOM2DTM.java",
     "ext/java/nokogiri/internals/dom2dtm/DOM2DTMdefaultNamespaceDeclarationNode.java",
@@ -150,9 +150,10 @@ Gem::Specification.new do |spec|
     "ext/nokogiri/html4_document.c",
     "ext/nokogiri/html4_element_description.c",
     "ext/nokogiri/html4_entity_lookup.c",
+    "ext/nokogiri/html4_sax_parser.c",
     "ext/nokogiri/html4_sax_parser_context.c",
     "ext/nokogiri/html4_sax_push_parser.c",
-    "ext/nokogiri/libxml2_backwards_compat.c",
+    "ext/nokogiri/libxml2_polyfill.c",
     "ext/nokogiri/nokogiri.c",
     "ext/nokogiri/nokogiri.h",
     "ext/nokogiri/xml_attr.c",
@@ -197,7 +198,7 @@ Gem::Specification.new do |spec|
     "gumbo-parser/src/error.h",
     "gumbo-parser/src/foreign_attrs.c",
     "gumbo-parser/src/foreign_attrs.gperf",
-    "gumbo-parser/src/gumbo.h",
+    "gumbo-parser/src/nokogiri_gumbo.h",
     "gumbo-parser/src/insertion_mode.h",
     "gumbo-parser/src/macros.h",
     "gumbo-parser/src/parser.c",
@@ -226,21 +227,20 @@ Gem::Specification.new do |spec|
     "gumbo-parser/src/util.h",
     "gumbo-parser/src/vector.c",
     "gumbo-parser/src/vector.h",
-    "lib/isorelax.jar",
-    "lib/jing.jar",
-    "lib/nekodtd.jar",
-    "lib/nekohtml.jar",
     "lib/nokogiri.rb",
+    "lib/nokogiri/class_resolver.rb",
     "lib/nokogiri/css.rb",
     "lib/nokogiri/css/node.rb",
     "lib/nokogiri/css/parser.rb",
     "lib/nokogiri/css/parser.y",
     "lib/nokogiri/css/parser_extras.rb",
+    "lib/nokogiri/css/selector_cache.rb",
     "lib/nokogiri/css/syntax_error.rb",
     "lib/nokogiri/css/tokenizer.rb",
     "lib/nokogiri/css/tokenizer.rex",
     "lib/nokogiri/css/xpath_visitor.rb",
     "lib/nokogiri/decorators/slop.rb",
+    "lib/nokogiri/encoding_handler.rb",
     "lib/nokogiri/extension.rb",
     "lib/nokogiri/gumbo.rb",
     "lib/nokogiri/html.rb",
@@ -250,15 +250,18 @@ Gem::Specification.new do |spec|
     "lib/nokogiri/html4/document_fragment.rb",
     "lib/nokogiri/html4/element_description.rb",
     "lib/nokogiri/html4/element_description_defaults.rb",
+    "lib/nokogiri/html4/encoding_reader.rb",
     "lib/nokogiri/html4/entity_lookup.rb",
     "lib/nokogiri/html4/sax/parser.rb",
     "lib/nokogiri/html4/sax/parser_context.rb",
     "lib/nokogiri/html4/sax/push_parser.rb",
     "lib/nokogiri/html5.rb",
+    "lib/nokogiri/html5/builder.rb",
     "lib/nokogiri/html5/document.rb",
     "lib/nokogiri/html5/document_fragment.rb",
     "lib/nokogiri/html5/node.rb",
     "lib/nokogiri/jruby/dependencies.rb",
+    "lib/nokogiri/jruby/nokogiri_jars.rb",
     "lib/nokogiri/syntax_error.rb",
     "lib/nokogiri/version.rb",
     "lib/nokogiri/version/constant.rb",
@@ -302,12 +305,20 @@ Gem::Specification.new do |spec|
     "lib/nokogiri/xml/xpath_context.rb",
     "lib/nokogiri/xslt.rb",
     "lib/nokogiri/xslt/stylesheet.rb",
-    "lib/serializer.jar",
-    "lib/xalan.jar",
-    "lib/xercesImpl.jar",
-    "lib/xml-apis.jar",
     "lib/xsd/xmlparser/nokogiri.rb",
   ]
+
+  spec.files += Dir.glob([
+    "lib/nokogiri/jruby/isorelax/isorelax/*/isorelax-*.jar",
+    "lib/nokogiri/jruby/net/sf/saxon/Saxon-HE/*/Saxon-HE-*.jar",
+    "lib/nokogiri/jruby/net/sourceforge/htmlunit/neko-htmlunit/*/neko-htmlunit-*.jar",
+    "lib/nokogiri/jruby/nu/validator/jing/*/jing-*.jar",
+    "lib/nokogiri/jruby/org/nokogiri/nekodtd/*/nekodtd-*.jar",
+    "lib/nokogiri/jruby/xalan/serializer/*/serializer-*.jar",
+    "lib/nokogiri/jruby/xalan/xalan/*/xalan-*.jar",
+    "lib/nokogiri/jruby/xerces/xercesImpl/*/xercesImpl-*.jar",
+    "lib/nokogiri/jruby/xml-apis/xml-apis/*/xml-apis-*.jar",
+  ])
 
   spec.bindir = "bin"
   spec.executables = spec.files.grep(/^bin/) { |f| File.basename(f) }
@@ -316,20 +327,24 @@ Gem::Specification.new do |spec|
   spec.extra_rdoc_files += Dir.glob("README.md")
   spec.rdoc_options = ["--main", "README.md"]
 
-  spec.add_runtime_dependency("racc", "~> 1.4")
-  spec.add_runtime_dependency("mini_portile2", "~> 2.7.0") unless java_p # keep version in sync with extconf.rb
+  if java_p
+    # loosen after jruby fixes https://github.com/jruby/jruby/issues/7262
+    # also see https://github.com/mkristian/jar-dependencies/commit/006fb254
+    spec.add_development_dependency("jar-dependencies", "= 0.4.1")
 
-  spec.add_development_dependency("bundler", "~> 2.2")
-  spec.add_development_dependency("hoe-markdown", "~> 1.4")
-  spec.add_development_dependency("minitest", "~> 5.8")
-  spec.add_development_dependency("minitest-reporters", "~> 1.4")
-  spec.add_development_dependency("rake", "~> 13.0")
-  spec.add_development_dependency("rake-compiler", "~> 1.1")
-  spec.add_development_dependency("rake-compiler-dock", "~> 1.1")
-  spec.add_development_dependency("rexical", "~> 1.0.5")
-  spec.add_development_dependency("rubocop", "~> 1.7")
-  spec.add_development_dependency("simplecov", "~> 0.20")
-  spec.add_development_dependency("yard", "~> 0.9")
+    spec.require_paths << "lib/nokogiri/jruby" # where we install the jars, see the :vendor_jars rake task
+    spec.requirements << "jar isorelax, isorelax, 20030108" # https://search.maven.org/artifact/isorelax/isorelax
+    spec.requirements << "jar org.nokogiri, nekodtd, 0.1.11.noko2"
+    spec.requirements << "jar net.sourceforge.htmlunit, neko-htmlunit, 2.63.0"
+    spec.requirements << "jar nu.validator, jing, 20200702VNU" # https://search.maven.org/artifact/nu.validator/jing
+    spec.requirements << "jar xalan, serializer, 2.7.3" # https://search.maven.org/artifact/xalan/serializer
+    spec.requirements << "jar xalan, xalan, 2.7.3" # https://search.maven.org/artifact/xalan/xalan
+    spec.requirements << "jar xerces, xercesImpl, 2.12.2" # https://search.maven.org/artifact/xerces/xercesImpl
+    spec.requirements << "jar xml-apis, xml-apis, 1.4.01" # https://search.maven.org/artifact/xml-apis/xml-apis
+  else
+    spec.add_runtime_dependency("mini_portile2", "~> 2.8.2") # keep version in sync with extconf.rb
+  end
+  spec.add_runtime_dependency("racc", "~> 1.4")
 
   spec.extensions << "ext/nokogiri/extconf.rb"
 end

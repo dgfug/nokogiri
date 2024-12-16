@@ -29,6 +29,7 @@ public class NokogiriService implements BasicLibraryService
     return true;
   }
 
+  @SuppressWarnings("unchecked")
   public static Map<String, RubyClass>
   getNokogiriClassCache(Ruby ruby)
   {
@@ -36,10 +37,9 @@ public class NokogiriService implements BasicLibraryService
   }
 
   private static Map<String, RubyClass>
-  populateNokogiriClassCahce(Ruby ruby)
+  populateNokogiriClassCache(Ruby ruby)
   {
     Map<String, RubyClass> nokogiriClassCache = new HashMap<String, RubyClass>();
-    nokogiriClassCache.put("Nokogiri::EncodingHandler", (RubyClass)ruby.getClassFromPath("Nokogiri::EncodingHandler"));
     nokogiriClassCache.put("Nokogiri::HTML4::Document", (RubyClass)ruby.getClassFromPath("Nokogiri::HTML4::Document"));
     nokogiriClassCache.put("Nokogiri::HTML4::ElementDescription",
                            (RubyClass)ruby.getClassFromPath("Nokogiri::HTML4::ElementDescription"));
@@ -85,29 +85,13 @@ public class NokogiriService implements BasicLibraryService
     RubyModule htmlSaxModule = htmlModule.defineModuleUnder("SAX");
     RubyModule xsltModule = nokogiri.defineModuleUnder("XSLT");
 
-    createJavaLibraryVersionConstants(ruby, nokogiri);
-    createNokogiriModule(ruby, nokogiri);
     createSyntaxErrors(ruby, nokogiri, xmlModule);
     RubyClass xmlNode = createXmlModule(ruby, xmlModule);
     createHtmlModule(ruby, htmlModule);
     createDocuments(ruby, xmlModule, htmlModule, xmlNode);
     createSaxModule(ruby, xmlSaxModule, htmlSaxModule);
     createXsltModule(ruby, xsltModule);
-    nokogiri.setInternalVariable("cache", populateNokogiriClassCahce(ruby));
-  }
-
-  private void
-  createJavaLibraryVersionConstants(Ruby ruby, RubyModule nokogiri)
-  {
-    nokogiri.defineConstant("XERCES_VERSION", ruby.newString(org.apache.xerces.impl.Version.getVersion()));
-    nokogiri.defineConstant("NEKO_VERSION", ruby.newString(org.cyberneko.html.Version.getVersion()));
-  }
-
-  private void
-  createNokogiriModule(Ruby ruby, RubyModule nokogiri)
-  {
-    RubyClass encHandler = nokogiri.defineClassUnder("EncodingHandler", ruby.getObject(), ENCODING_HANDLER_ALLOCATOR);
-    encHandler.defineAnnotatedMethods(EncodingHandler.class);
+    nokogiri.setInternalVariable("cache", populateNokogiriClassCache(ruby));
   }
 
   private void
@@ -243,15 +227,7 @@ public class NokogiriService implements BasicLibraryService
   {
     RubyClass stylesheet = xsltModule.defineClassUnder("Stylesheet", ruby.getObject(), XSLT_STYLESHEET_ALLOCATOR);
     stylesheet.defineAnnotatedMethods(XsltStylesheet.class);
-    xsltModule.defineAnnotatedMethod(XsltStylesheet.class, "register");
   }
-
-  private static ObjectAllocator ENCODING_HANDLER_ALLOCATOR = new ObjectAllocator()
-  {
-    public IRubyObject allocate(Ruby runtime, RubyClass klazz) {
-      return new EncodingHandler(runtime, klazz, "");
-    }
-  };
 
   public static final ObjectAllocator HTML_DOCUMENT_ALLOCATOR = new ObjectAllocator()
   {

@@ -7,23 +7,20 @@ if [[ $# -lt 2 ]] ; then
   exit 1
 fi
 
-set -e -u
+set -e
 
 OUTPUT_DIR=$1
 BUILD_NATIVE_GEM=$2
 
 test -e /etc/os-release && cat /etc/os-release
 
-if [[ "${XRUBIES:-}" != "" ]] ; then
-  # normally part of rake-compiler-dock "runas"
-  . /etc/rubybashrc
-  ln -s /usr/local/rake-compiler "$HOME"/.rake-compiler
-  export RAKE_EXTENSION_TASK_NO_NATIVE=true
-fi
+set -u -x
 
-set -x
+# avoid the pernicious "fatal: detected dubious ownership in repository" errors
+git config --global --add safe.directory $(realpath $(dirname $0)/..)
 
-bundle install --local || bundle install
+bundle
+
 bundle exec rake set-version-to-timestamp
 
 if [[ "${BUILD_NATIVE_GEM}" == "ruby" ]] ; then
@@ -33,8 +30,10 @@ if [[ "${BUILD_NATIVE_GEM}" == "ruby" ]] ; then
 elif [[ "${BUILD_NATIVE_GEM}" == "java" ]] ; then
   bundle exec rake java gem
 else
-  bundle exec rake gem:${BUILD_NATIVE_GEM}:builder FORCE_CROSS_COMPILING=true
+  bundle exec rake gem:${BUILD_NATIVE_GEM}:builder
 fi
+
+chmod -v 664 ports/archives/* || true
 
 ./scripts/test-gem-file-contents pkg/nokogiri*.gem
 

@@ -50,7 +50,7 @@
 #include "attribute.h"
 #include "char_ref.h"
 #include "error.h"
-#include "gumbo.h"
+#include "nokogiri_gumbo.h"
 #include "parser.h"
 #include "string_buffer.h"
 #include "token_type.h"
@@ -340,7 +340,7 @@ static void reset_token_start_point(GumboTokenizerState* tokenizer) {
 
 // Sets the tag buffer original text and start point to the current iterator
 // position. This is necessary because attribute names & values may have
-// whitespace preceeding them, and so we can't assume that the actual token
+// whitespace preceding them, and so we can't assume that the actual token
 // starting point was the end of the last tag buffer usage.
 static void reset_tag_buffer_start_point(GumboParser* parser) {
   GumboTokenizerState* tokenizer = parser->_tokenizer_state;
@@ -506,6 +506,7 @@ static void abandon_current_tag(GumboParser* parser) {
   for (unsigned int i = 0; i < tag_state->_attributes.length; ++i) {
     gumbo_destroy_attribute(tag_state->_attributes.data[i]);
   }
+  gumbo_free(tag_state->_name);
   gumbo_free(tag_state->_attributes.data);
   mark_tag_state_as_empty(tag_state);
   gumbo_string_buffer_destroy(&tag_state->_buffer);
@@ -568,17 +569,17 @@ static StateResult emit_from_mark(GumboParser* parser, GumboToken* output) {
 }
 
 // Appends a codepoint to the current tag buffer. If
-// reinitilize_position_on_first is set, this also initializes the tag buffer
+// reinitialize_position_on_first is set, this also initializes the tag buffer
 // start point; the only time you would *not* want to pass true for this
 // parameter is if you want the original_text to include character (like an
 // opening quote) that doesn't appear in the value.
 static void append_char_to_tag_buffer (
   GumboParser* parser,
   int codepoint,
-  bool reinitilize_position_on_first
+  bool reinitialize_position_on_first
 ) {
   GumboStringBuffer* buffer = &parser->_tokenizer_state->_tag_state._buffer;
-  if (buffer->length == 0 && reinitilize_position_on_first) {
+  if (buffer->length == 0 && reinitialize_position_on_first) {
     reset_tag_buffer_start_point(parser);
   }
   gumbo_string_buffer_append_codepoint(codepoint, buffer);
@@ -588,10 +589,10 @@ static void append_char_to_tag_buffer (
 static void append_string_to_tag_buffer (
   GumboParser* parser,
   GumboStringPiece* str,
-  bool reinitilize_position_on_first
+  bool reinitialize_position_on_first
 ) {
   GumboStringBuffer* buffer = &parser->_tokenizer_state->_tag_state._buffer;
-  if (buffer->length == 0 && reinitilize_position_on_first) {
+  if (buffer->length == 0 && reinitialize_position_on_first) {
     reset_tag_buffer_start_point(parser);
   }
   gumbo_string_buffer_append_string(str, buffer);

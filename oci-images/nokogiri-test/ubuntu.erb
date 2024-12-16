@@ -1,0 +1,14 @@
+FROM ubuntu:noble
+
+<%= include_file "debian-prelude.step" %>
+
+<%= include_file "debian-git.step" %>
+
+<%= include_file "debian-libxml-et-al.step" %>
+
+<%= include_file "debian-ruby.step" %>
+
+<%= include_file "bundle-install.step" %>
+
+# for libxml2 canonicalization
+ENV LANG=C.UTF-8

@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require "helper"
 
 module Nokogiri
@@ -59,13 +60,12 @@ module Nokogiri
           assert_instance_of(Nokogiri::XML::DocumentFragment, fragment)
         end
 
-        def test_many_fragments
-          100.times { Nokogiri::XML::DocumentFragment.new(xml) }
-        end
-
         def test_unparented_text_node_parse
-          fragment = Nokogiri::XML::DocumentFragment.parse("foo")
-          fragment.children.after("<bar/>")
+          # https://github.com/sparklemotion/nokogiri/issues/407
+          refute_raises do
+            fragment = Nokogiri::XML::DocumentFragment.parse("foo")
+            fragment.children.after("<bar/>")
+          end
         end
 
         def test_xml_fragment
@@ -110,7 +110,7 @@ module Nokogiri
 
         def test_fragment_children_search
           fragment = Nokogiri::XML::Document.new.fragment(
-            '<div><p id="content">hi</p></div>'
+            '<div><p id="content">hi</p></div>',
           )
           expected = fragment.children.xpath(".//p")
           assert_equal(1, expected.length)
@@ -151,21 +151,45 @@ module Nokogiri
             [:search, "./*[@id = 'content']"],
           ].each do |method, query|
             result = frag.send(method, query)
-            assert_equal(expected, result,
-              "fragment search with :#{method} using '#{query}' expected '#{expected}' got '#{result}'")
+            assert_equal(
+              expected,
+              result,
+              "fragment search with :#{method} using '#{query}' expected '#{expected}' got '#{result}'",
+            )
           end
         end
 
+        def test_search_direct_children_of_fragment
+          xml = <<~XML
+            <div class="section header" id="1">
+              <div class="subsection header">sub 1</div>
+              <div class="subsection header">sub 2</div>
+            </div>
+            <div class="section header" id="2">
+              <div class="subsection header">sub 3</div>
+              <div class="subsection header">sub 4</div>
+            </div>
+          XML
+          fragment = Nokogiri::XML.fragment(xml)
+          result = (fragment > "div.header")
+          assert_equal(2, result.length)
+          assert_equal(["1", "2"], result.map { |n| n["id"] })
+
+          assert_empty(fragment > ".no-such-match")
+        end
+
         def test_fragment_search_with_multiple_queries
-          xml = '<thing>
-                 <div class="title">important thing</div>
-               </thing>
-               <thing>
-                 <div class="content">stuff</div>
-               </thing>
-               <thing>
-                 <p class="blah">more stuff</div>
-               </thing>'
+          xml = <<~EOF
+            <thing>
+              <div class="title">important thing</div>
+            </thing>
+            <thing>
+              <div class="content">stuff</div>
+            </thing>
+            <thing>
+              <p class="blah">more stuff</div>
+            </thing>
+          EOF
           fragment = Nokogiri::XML.fragment(xml)
           assert_kind_of(Nokogiri::XML::DocumentFragment, fragment)
 
@@ -216,11 +240,11 @@ module Nokogiri
           fragment = Nokogiri::XML::DocumentFragment.new(xml, "<div>a</div><div>b</div>")
 
           assert(node_set = fragment.css("div"))
-          assert(node_set.respond_to?(:awesome!))
+          assert_respond_to(node_set, :awesome!)
           node_set.each do |node|
-            assert(node.respond_to?(:awesome!), node.class)
+            assert_respond_to(node, :awesome!, node.class)
           end
-          assert(fragment.children.respond_to?(:awesome!), fragment.children.class)
+          assert_respond_to(fragment.children, :awesome!, fragment.children.class)
         end
 
         def test_decorator_is_applied_to_empty_set
@@ -230,12 +254,16 @@ module Nokogiri
           end
           util_decorate(xml, x)
           fragment = Nokogiri::XML::DocumentFragment.new(xml, "")
-          assert(fragment.children.respond_to?(:awesome!), fragment.children.class)
+          assert_respond_to(fragment.children, :awesome!, fragment.children.class)
         end
 
         def test_add_node_to_doc_fragment_segfault
-          frag = Nokogiri::XML::DocumentFragment.new(xml, "<p>hello world</p>")
-          Nokogiri::XML::Comment.new(frag, "moo")
+          skip_unless_libxml2("valgrind tests should only run with libxml2")
+
+          refute_valgrind_errors do
+            frag = Nokogiri::XML::DocumentFragment.new(xml, "<p>hello world</p>")
+            Nokogiri::XML::Comment.new(frag, "moo")
+          end
         end
 
         def test_issue_1077_parsing_of_frozen_strings
@@ -247,7 +275,9 @@ module Nokogiri
           EOS
           input.freeze
 
-          Nokogiri::XML::DocumentFragment.parse(input) # assert_nothing_raised
+          refute_raises do
+            Nokogiri::XML::DocumentFragment.parse(input)
+          end
         end
 
         def test_dup_should_exist_in_a_new_document
@@ -255,7 +285,7 @@ module Nokogiri
           # https://github.com/sparklemotion/nokogiri/issues/1063
           original = Nokogiri::XML::DocumentFragment.parse("<div><p>hello</p></div>")
           duplicate = original.dup
-          assert_not_equal(original.document, duplicate.document)
+          refute_equal(original.document, duplicate.document)
         end
 
         def test_dup_should_create_an_xml_document_fragment
@@ -271,12 +301,40 @@ module Nokogiri
           assert_equal(original.to_html, duplicate.to_html)
         end
 
+        def test_dup_creates_tree_with_identical_structure_stress
+          # https://github.com/sparklemotion/nokogiri/issues/3359
+          skip_unless_libxml2("this is testing CRuby GC behavior")
+
+          original = Nokogiri::XML::DocumentFragment.parse("<div><p>hello</p></div>")
+          duplicate = original.dup
+
+          stress_memory_while do
+            duplicate.to_html
+          end
+
+          assert_equal(original.to_html, duplicate.to_html)
+        end
+
         def test_dup_creates_mutable_tree
           original = Nokogiri::XML::DocumentFragment.parse("<div><p>hello</p></div>")
           duplicate = original.dup
           duplicate.at_css("div").add_child("<b>hello there</b>")
           assert_nil(original.at_css("b"))
-          assert_not_nil(duplicate.at_css("b"))
+          refute_nil(duplicate.at_css("b"))
+        end
+
+        def test_in_context_fragment_parsing_recovery
+          skip("This tests behavior in libxml 2.13") unless Nokogiri.uses_libxml?(">= 2.13.0")
+
+          # https://github.com/sparklemotion/nokogiri/issues/2092
+          context_xml = "<root xmlns:n='https://example.com/foo'></root>"
+          context_doc = Nokogiri::XML::Document.parse(context_xml)
+          invalid_xml_fragment = "<n:a><b></n:a>" # note missing closing tag for `b`
+          fragment = context_doc.root.parse(invalid_xml_fragment)
+
+          assert_equal("a", fragment.first.name)
+          assert_equal("n", fragment.first.namespace.prefix)
+          assert_equal("https://example.com/foo", fragment.first.namespace.href)
         end
 
         def test_for_libxml_in_context_fragment_parsing_bug_workaround
@@ -310,14 +368,185 @@ module Nokogiri
           end
         end
 
+        describe "parse options" do
+          let(:xml_default) do
+            Nokogiri::XML::ParseOptions.new(Nokogiri::XML::ParseOptions::DEFAULT_XML)
+          end
+
+          let(:xml_strict) do
+            Nokogiri::XML::ParseOptions.new(Nokogiri::XML::ParseOptions::DEFAULT_XML).norecover
+          end
+
+          let(:input) { "<a>foo</a" }
+
+          it "sets the test up correctly" do
+            assert_predicate(xml_strict, :strict?)
+          end
+
+          describe "XML.fragment" do
+            it "has sane defaults" do
+              frag = Nokogiri::XML.fragment(input)
+              assert_equal("<a>foo</a>", frag.to_html)
+              refute_empty(frag.errors)
+            end
+
+            it "accepts options" do
+              frag = Nokogiri::XML.fragment(input, xml_default)
+              assert_equal("<a>foo</a>", frag.to_html)
+              refute_empty(frag.errors)
+
+              assert_raises(Nokogiri::SyntaxError) do
+                Nokogiri::XML.fragment(input, xml_strict)
+              end
+            end
+
+            it "accepts kwargs" do
+              frag = Nokogiri::XML.fragment(input, options: xml_default)
+              assert_equal("<a>foo</a>", frag.to_html)
+              refute_empty(frag.errors)
+
+              assert_raises(Nokogiri::SyntaxError) do
+                Nokogiri::XML.fragment(input, options: xml_strict)
+              end
+            end
+
+            it "takes a config block" do
+              default_config = nil
+              Nokogiri::XML.fragment(input) do |config|
+                default_config = config
+              end
+              refute_predicate(default_config, :strict?)
+
+              assert_raises(Nokogiri::SyntaxError) do
+                Nokogiri::XML.fragment(input, &:norecover)
+              end
+            end
+          end
+
+          describe "XML::DocumentFragment.parse" do
+            it "has sane defaults" do
+              frag = Nokogiri::XML::DocumentFragment.parse(input)
+              assert_equal("<a>foo</a>", frag.to_html)
+              refute_empty(frag.errors)
+            end
+
+            it "accepts options" do
+              frag = Nokogiri::XML::DocumentFragment.parse(input, xml_default)
+              assert_equal("<a>foo</a>", frag.to_html)
+              refute_empty(frag.errors)
+
+              assert_raises(Nokogiri::SyntaxError) do
+                Nokogiri::XML::DocumentFragment.parse(input, xml_strict)
+              end
+            end
+
+            it "accepts kwargs" do
+              frag = Nokogiri::XML::DocumentFragment.parse(input, options: xml_default)
+              assert_equal("<a>foo</a>", frag.to_html)
+              refute_empty(frag.errors)
+
+              assert_raises(Nokogiri::SyntaxError) do
+                Nokogiri::XML::DocumentFragment.parse(input, options: xml_strict)
+              end
+            end
+
+            it "takes a config block" do
+              default_config = nil
+              Nokogiri::XML::DocumentFragment.parse(input) do |config|
+                default_config = config
+              end
+              refute_predicate(default_config, :strict?)
+
+              assert_raises(Nokogiri::SyntaxError) do
+                Nokogiri::XML::DocumentFragment.parse(input, &:norecover)
+              end
+            end
+          end
+
+          describe "XML::DocumentFragment.new" do
+            describe "without a context node" do
+              it "has sane defaults" do
+                frag = Nokogiri::XML::DocumentFragment.new(Nokogiri::XML::Document.new, input)
+                assert_equal("<a>foo</a>", frag.to_html)
+                refute_empty(frag.errors)
+              end
+
+              it "accepts options" do
+                frag = Nokogiri::XML::DocumentFragment.new(Nokogiri::XML::Document.new, input, nil, xml_default)
+                assert_equal("<a>foo</a>", frag.to_html)
+                refute_empty(frag.errors)
+
+                assert_raises(Nokogiri::SyntaxError) do
+                  Nokogiri::XML::DocumentFragment.new(Nokogiri::XML::Document.new, input, nil, xml_strict)
+                end
+              end
+
+              it "accepts options as kwargs" do
+                frag = Nokogiri::XML::DocumentFragment.new(Nokogiri::XML::Document.new, input, options: xml_default)
+                assert_equal("<a>foo</a>", frag.to_html)
+                refute_empty(frag.errors)
+
+                assert_raises(Nokogiri::SyntaxError) do
+                  Nokogiri::XML::DocumentFragment.new(Nokogiri::XML::Document.new, input, options: xml_strict)
+                end
+              end
+
+              it "takes a config block" do
+                default_config = nil
+                Nokogiri::XML::DocumentFragment.new(Nokogiri::XML::Document.new, input) do |config|
+                  default_config = config
+                end
+                refute_predicate(default_config, :strict?)
+
+                assert_raises(Nokogiri::SyntaxError) do
+                  Nokogiri::XML::DocumentFragment.new(Nokogiri::XML::Document.new, input, &:norecover)
+                end
+              end
+            end
+
+            describe "with a context node" do
+              let(:document) { Nokogiri::XML::Document.parse("<context></context>") }
+              let(:context_node) { document.at_css("context") }
+
+              it "has sane defaults" do
+                frag = Nokogiri::XML::DocumentFragment.new(document, input, context_node)
+                assert_equal("<a>foo</a>", frag.to_html)
+                refute_empty(frag.errors)
+              end
+
+              it "accepts options" do
+                frag = Nokogiri::XML::DocumentFragment.new(document, input, context_node, xml_default)
+                assert_equal("<a>foo</a>", frag.to_html)
+                refute_empty(frag.errors)
+
+                assert_raises(Nokogiri::SyntaxError) do
+                  Nokogiri::XML::DocumentFragment.new(document, input, context_node, xml_strict)
+                end
+              end
+
+              it "takes a config block" do
+                default_config = nil
+                Nokogiri::XML::DocumentFragment.new(document, input, context_node) do |config|
+                  default_config = config
+                end
+                refute_predicate(default_config, :strict?)
+
+                assert_raises(Nokogiri::SyntaxError) do
+                  Nokogiri::XML::DocumentFragment.new(document, input, context_node, &:norecover)
+                end
+              end
+            end
+          end
+        end
+
         describe "subclassing" do
           let(:klass) do
             Class.new(Nokogiri::XML::DocumentFragment) do
               attr_accessor :initialized_with, :initialized_count
 
-              def initialize(*args)
+              def initialize(*args, **kwargs)
                 super
-                @initialized_with = args
+                @initialized_with = [args, kwargs]
                 @initialized_count ||= 0
                 @initialized_count += 1
               end
@@ -336,8 +565,11 @@ module Nokogiri
             end
 
             it "passes args to #initialize" do
-              fragment = klass.new(xml, "<div>a</div>")
-              assert_equal([xml, "<div>a</div>"], fragment.initialized_with)
+              fragment = klass.new(xml, "<div>a</div>", options: ParseOptions::DEFAULT_XML)
+              assert_equal(
+                [[xml, "<div>a</div>"], { options: ParseOptions::DEFAULT_XML }],
+                fragment.initialized_with,
+              )
             end
           end
 

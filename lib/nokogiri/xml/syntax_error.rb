@@ -1,15 +1,38 @@
 # frozen_string_literal: true
+
 module Nokogiri
   module XML
     ###
     # This class provides information about XML SyntaxErrors.  These
     # exceptions are typically stored on Nokogiri::XML::Document#errors.
     class SyntaxError < ::Nokogiri::SyntaxError
+      class << self
+        def aggregate(errors)
+          return nil if errors.empty?
+          return errors.first if errors.length == 1
+
+          messages = ["Multiple errors encountered:"]
+          errors.each do |error|
+            messages << error.to_s
+          end
+          new(messages.join("\n"))
+        end
+      end
+
       attr_reader :domain
       attr_reader :code
       attr_reader :level
       attr_reader :file
       attr_reader :line
+
+      # The XPath path of the node that caused the error when validating a `Nokogiri::XML::Document`.
+      #
+      # This attribute will only be non-nil when the error is emitted by `Schema#validate` on
+      # Document objects. It will return `nil` for DOM parsing errors and for errors emitted during
+      # Schema validation of files.
+      #
+      # ⚠ `#path` is not supported on JRuby, where it will always return `nil`.
+      attr_reader :path
       attr_reader :str1
       attr_reader :str2
       attr_reader :str3
@@ -42,9 +65,9 @@ module Nokogiri
 
       def to_s
         message = super.chomp
-        [location_to_s, level_to_s, message].
-          compact.join(": ").
-          force_encoding(message.encoding)
+        [location_to_s, level_to_s, message]
+          .compact.join(": ")
+          .force_encoding(message.encoding)
       end
 
       private
@@ -54,7 +77,6 @@ module Nokogiri
         when 3 then "FATAL"
         when 2 then "ERROR"
         when 1 then "WARNING"
-        else nil
         end
       end
 
@@ -63,7 +85,8 @@ module Nokogiri
       end
 
       def location_to_s
-        return nil if nil_or_zero?(line) && nil_or_zero?(column)
+        return if nil_or_zero?(line) && nil_or_zero?(column)
+
         "#{line}:#{column}"
       end
     end

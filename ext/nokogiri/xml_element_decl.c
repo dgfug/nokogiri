@@ -6,7 +6,7 @@ static ID id_document;
 
 /*
  * call-seq:
- *  element_type
+ *   element_type → Integer
  *
  * The element_type
  */
@@ -14,21 +14,21 @@ static VALUE
 element_type(VALUE self)
 {
   xmlElementPtr node;
-  Data_Get_Struct(self, xmlElement, node);
-  return INT2NUM((long)node->etype);
+  Noko_Node_Get_Struct(self, xmlElement, node);
+  return INT2NUM(node->etype);
 }
 
 /*
  * call-seq:
- *  content
+ *   content → Nokogiri::XML::ElementContent
  *
- * The allowed content for this ElementDecl
+ * [Returns] The root of this element declaration's content tree.
  */
 static VALUE
 content(VALUE self)
 {
   xmlElementPtr node;
-  Data_Get_Struct(self, xmlElement, node);
+  Noko_Node_Get_Struct(self, xmlElement, node);
 
   if (!node->content) { return Qnil; }
 
@@ -40,15 +40,15 @@ content(VALUE self)
 
 /*
  * call-seq:
- *  prefix
+ *   prefix → String
  *
- * The namespace prefix for this ElementDecl
+ * [Returns] The namespace +prefix+ for this element declaration.
  */
 static VALUE
 prefix(VALUE self)
 {
   xmlElementPtr node;
-  Data_Get_Struct(self, xmlElement, node);
+  Noko_Node_Get_Struct(self, xmlElement, node);
 
   if (!node->prefix) { return Qnil; }
 
@@ -56,7 +56,7 @@ prefix(VALUE self)
 }
 
 void
-noko_init_xml_element_decl()
+noko_init_xml_element_decl(void)
 {
   assert(cNokogiriXmlNode);
   cNokogiriXmlElementDecl = rb_define_class_under(mNokogiriXml, "ElementDecl", cNokogiriXmlNode);

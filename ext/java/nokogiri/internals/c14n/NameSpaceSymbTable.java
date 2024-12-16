@@ -44,7 +44,7 @@ public class NameSpaceSymbTable
     initialMap.put(XMLNS, ne);
   }
 
-  /**The map betwen prefix-> entry table. */
+  /**The map between prefix-> entry table. */
   private SymbMap symb;
 
   /**The stacks for removing the definitions when doing pop.*/
@@ -52,7 +52,7 @@ public class NameSpaceSymbTable
   private boolean cloned = true;
 
   /**
-   * Default constractor
+   * Default constructor
    **/
   public
   NameSpaceSymbTable()
@@ -173,14 +173,14 @@ public class NameSpaceSymbTable
     symb.put(prefix, entry);
     entry.rendered = true;
     entry.lastrendered = entry.uri;
-    // Return the node for outputing.
+    // Return the node for outputting.
     return entry.n;
   }
 
   /**
    * Gets a definition without mark it as render.
    * For render in exclusive c14n the namespaces in the include prefixes.
-   * @param prefix The prefix whose definition is neaded.
+   * @param prefix The prefix whose definition is needed.
    * @return the attr to render, null if there is no need to render
    **/
   public Attr
@@ -217,7 +217,7 @@ public class NameSpaceSymbTable
     symb.put(prefix, ne);
     if (ob != null) {
       //We have a previous definition store it for the pop.
-      //Check if a previous definition(not the inmidiatly one) has been rendered.
+      //Check if a previous definition(not the immediate one) has been rendered.
       ne.lastrendered = ob.lastrendered;
       if ((ob.lastrendered != null) && (ob.lastrendered.equals(uri))) {
         //Yes it is. Mark as rendered.

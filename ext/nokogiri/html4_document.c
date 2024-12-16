@@ -7,9 +7,9 @@ static ID id_to_s;
 
 /*
  * call-seq:
- *  new
+ *  new(uri=nil, external_id=nil) → HTML4::Document
  *
- * Create a new document
+ * Create a new empty document with base URI +uri+ and external ID +external_id+.
  */
 static VALUE
 rb_html_document_s_new(int argc, VALUE *argv, VALUE klass)
@@ -46,7 +46,7 @@ rb_html_document_s_read_io(VALUE klass, VALUE rb_io, VALUE rb_url, VALUE rb_enco
   const char *c_encoding = NIL_P(rb_encoding) ? NULL : StringValueCStr(rb_encoding);
   int options = NUM2INT(rb_options);
 
-  xmlSetStructuredErrorFunc((void *)rb_error_list, Nokogiri_error_array_pusher);
+  xmlSetStructuredErrorFunc((void *)rb_error_list, noko__error_array_pusher);
 
   c_doc = htmlReadIO(noko_io_read, noko_io_close, (void *)rb_io, c_url, c_encoding, options);
 
@@ -106,7 +106,7 @@ rb_html_document_s_read_memory(VALUE klass, VALUE rb_html, VALUE rb_url, VALUE r
   int html_len = (int)RSTRING_LEN(rb_html);
   int options = NUM2INT(rb_options);
 
-  xmlSetStructuredErrorFunc((void *)rb_error_list, Nokogiri_error_array_pusher);
+  xmlSetStructuredErrorFunc((void *)rb_error_list, noko__error_array_pusher);
 
   c_doc = htmlReadMemory(c_buffer, html_len, c_url, c_encoding, options);
 
@@ -144,14 +144,19 @@ rb_html_document_s_read_memory(VALUE klass, VALUE rb_html, VALUE rb_url, VALUE r
 static VALUE
 rb_html_document_type(VALUE self)
 {
-  htmlDocPtr doc;
-  Data_Get_Struct(self, xmlDoc, doc);
-  return INT2NUM((long)doc->type);
+  htmlDocPtr doc = noko_xml_document_unwrap(self);
+  return INT2NUM(doc->type);
 }
 
 void
-noko_init_html_document()
+noko_init_html_document(void)
 {
+  /* this is here so that rdoc doesn't ignore this file. */
+  /*
+    mNokogiri         = rb_define_module("Nokogiri");
+    mNokogiriHtml4    = rb_define_module_under(mNokogiri, "HTML4");
+  */
+
   assert(cNokogiriXmlDocument);
   cNokogiriHtml4Document = rb_define_class_under(mNokogiriHtml4, "Document", cNokogiriXmlDocument);
 

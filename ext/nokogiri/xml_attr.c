@@ -6,7 +6,7 @@ VALUE cNokogiriXmlAttr;
  * call-seq:
  *  value=(content)
  *
- * Set the value for this Attr to +content+. Use `nil` to remove the value
+ * Set the value for this Attr to +content+. Use +nil+ to remove the value
  * (e.g., a HTML boolean attribute).
  */
 static VALUE
@@ -16,7 +16,7 @@ set_value(VALUE self, VALUE content)
   xmlChar *value;
   xmlNode *cur;
 
-  Data_Get_Struct(self, xmlAttr, attr);
+  Noko_Node_Get_Struct(self, xmlAttr, attr);
 
   if (attr->children) {
     xmlFreeNodeList(attr->children);
@@ -68,7 +68,7 @@ new (int argc, VALUE *argv, VALUE klass)
     rb_raise(rb_eArgError, "parameter must be a Nokogiri::XML::Document");
   }
 
-  Data_Get_Struct(document, xmlDoc, xml_doc);
+  xml_doc = noko_xml_document_unwrap(document);
 
   node = xmlNewDocProp(
            xml_doc,
@@ -89,7 +89,7 @@ new (int argc, VALUE *argv, VALUE klass)
 }
 
 void
-noko_init_xml_attr()
+noko_init_xml_attr(void)
 {
   assert(cNokogiriXmlNode);
   /*

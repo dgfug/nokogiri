@@ -12,7 +12,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.cyberneko.html.HTMLElements;
+import net.sourceforge.htmlunit.cyberneko.HTMLElements;
 import org.w3c.dom.Attr;
 import org.w3c.dom.CDATASection;
 import org.w3c.dom.Comment;
@@ -74,12 +74,15 @@ public class SaveContextVisitor
   public static final int AS_XML = 32;
   public static final int AS_HTML = 64;
   public static final int AS_BUILDER = 128;
+  public static final int DEFAULT_HTML = NO_DECL | NO_EMPTY | AS_HTML;
 
   public static final int CANONICAL = 1;
   public static final int INCL_NS = 2;
   public static final int WITH_COMMENTS = 4;
   public static final int SUBSETS = 8;
   public static final int EXCLUSIVE = 16;
+
+  private static final HTMLElements htmlElements_ = new HTMLElements();
 
   public
   SaveContextVisitor(int options, CharSequence indent, String encoding, boolean htmlDoc, boolean fragment,
@@ -498,7 +501,7 @@ public class SaveContextVisitor
   private boolean
   isEmpty(String name)
   {
-    HTMLElements.Element element = HTMLElements.getElement(name);
+    HTMLElements.Element element = htmlElements_.getElement(name);
     return element.isEmpty();
   }
 
@@ -673,6 +676,8 @@ public class SaveContextVisitor
       if (!isEmpty(name) && noEmpty) {
         buffer.append("</").append(name).append('>');
       }
+    } else if (asXhtml && !isEmpty(name)) {
+      buffer.append("</").append(name).append('>');
     }
     if (needBreakInClosing(element)) {
       if (!containsText(element)) { indentation.pop(); }
@@ -803,16 +808,13 @@ public class SaveContextVisitor
   }
 
   private boolean
-  isHtmlScript(Text text)
+  isCDATA(Text text)
   {
-    return htmlDoc && text.getParentNode().getNodeName().equals("script");
+    Node parentNode = text.getParentNode();
+    return htmlDoc && parentNode != null && (parentNode.getNodeName().equals("style")
+           || parentNode.getNodeName().equals("script"));
   }
 
-  private boolean
-  isHtmlStyle(Text text)
-  {
-    return htmlDoc && text.getParentNode().getNodeName().equals("style");
-  }
 
   public boolean
   enter(Text text)
@@ -826,7 +828,7 @@ public class SaveContextVisitor
       }
     }
 
-    if (shouldEncode(text) && !isHtmlScript(text) && !isHtmlStyle(text)) {
+    if (shouldEncode(text) && !isCDATA(text)) {
       textContent = encodeJavaString(textContent);
     }
 

@@ -39,8 +39,9 @@ ruby_object_get(xmlNodePtr c_node)
 
 
 static void
-mark(xmlNodeSetPtr node_set)
+xml_node_set_mark(void *data)
 {
+  xmlNodeSetPtr node_set = data;
   VALUE rb_node;
   int jnode;
 
@@ -50,6 +51,57 @@ mark(xmlNodeSetPtr node_set)
       rb_gc_mark(rb_node);
     }
   }
+}
+
+static void
+xml_node_set_deallocate(void *data)
+{
+  xmlNodeSetPtr node_set = data;
+  /*
+   * For reasons outlined in xml_namespace.c, here we reproduce xmlXPathFreeNodeSet() except for the
+   * offending call to xmlXPathNodeSetFreeNs().
+   */
+  if (node_set->nodeTab != NULL) {
+    xmlFree(node_set->nodeTab);
+  }
+
+  xmlFree(node_set);
+}
+
+static const rb_data_type_t xml_node_set_type = {
+  .wrap_struct_name = "xmlNodeSet",
+  .function = {
+    .dmark = xml_node_set_mark,
+    .dfree = xml_node_set_deallocate,
+  },
+  .flags = RUBY_TYPED_FREE_IMMEDIATELY,
+};
+
+static VALUE
+xml_node_set_allocate(VALUE klass)
+{
+  return TypedData_Wrap_Struct(klass, &xml_node_set_type, xmlXPathNodeSetCreate(NULL));
+}
+
+/* :nodoc: */
+static VALUE
+rb_xml_node_set_initialize_copy(VALUE rb_self, VALUE rb_other)
+{
+  xmlNodeSetPtr c_self, c_other;
+  VALUE rb_document;
+
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
+  TypedData_Get_Struct(rb_other, xmlNodeSet, &xml_node_set_type, c_other);
+
+  xmlXPathNodeSetMerge(c_self, c_other);
+
+  rb_document = rb_iv_get(rb_other, "@document");
+  if (!NIL_P(rb_document)) {
+    rb_iv_set(rb_self, "@document", rb_document);
+    rb_funcall(rb_document, decorate, 1, rb_self);
+  }
+
+  return rb_self;
 }
 
 static void
@@ -80,51 +132,6 @@ xpath_node_set_del(xmlNodeSetPtr cur, xmlNodePtr val)
   cur->nodeTab[cur->nodeNr] = NULL;
 }
 
-
-static void
-deallocate(xmlNodeSetPtr node_set)
-{
-  /*
-   * For reasons outlined in xml_namespace.c, here we reproduce xmlXPathFreeNodeSet() except for the
-   * offending call to xmlXPathNodeSetFreeNs().
-   */
-  NOKOGIRI_DEBUG_START(node_set) ;
-  if (node_set->nodeTab != NULL) {
-    xmlFree(node_set->nodeTab);
-  }
-
-  xmlFree(node_set);
-  NOKOGIRI_DEBUG_END(node_set) ;
-}
-
-
-static VALUE
-allocate(VALUE klass)
-{
-  return noko_xml_node_set_wrap(xmlXPathNodeSetCreate(NULL), Qnil);
-}
-
-
-/*
- * call-seq:
- *  dup
- *
- * Duplicate this NodeSet. Note that the Nodes contained in the NodeSet are not
- * duplicated (similar to how Array and other Enumerable classes work).
- */
-static VALUE
-duplicate(VALUE self)
-{
-  xmlNodeSetPtr node_set;
-  xmlNodeSetPtr dupl;
-
-  Data_Get_Struct(self, xmlNodeSet, node_set);
-
-  dupl = xmlXPathNodeSetMerge(NULL, node_set);
-
-  return noko_xml_node_set_wrap(dupl, rb_iv_get(self, "@document"));
-}
-
 /*
  * call-seq:
  *  length
@@ -132,13 +139,13 @@ duplicate(VALUE self)
  * Get the length of the node set
  */
 static VALUE
-length(VALUE self)
+length(VALUE rb_self)
 {
-  xmlNodeSetPtr node_set;
+  xmlNodeSetPtr c_self;
 
-  Data_Get_Struct(self, xmlNodeSet, node_set);
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
 
-  return node_set ? INT2NUM(node_set->nodeNr) : INT2NUM(0);
+  return c_self ? INT2NUM(c_self->nodeNr) : INT2NUM(0);
 }
 
 /*
@@ -148,19 +155,19 @@ length(VALUE self)
  * Append +node+ to the NodeSet.
  */
 static VALUE
-push(VALUE self, VALUE rb_node)
+push(VALUE rb_self, VALUE rb_node)
 {
-  xmlNodeSetPtr node_set;
+  xmlNodeSetPtr c_self;
   xmlNodePtr node;
 
   Check_Node_Set_Node_Type(rb_node);
 
-  Data_Get_Struct(self, xmlNodeSet, node_set);
-  Data_Get_Struct(rb_node, xmlNode, node);
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
+  Noko_Node_Get_Struct(rb_node, xmlNode, node);
 
-  xmlXPathNodeSetAdd(node_set, node);
+  xmlXPathNodeSetAdd(c_self, node);
 
-  return self;
+  return rb_self;
 }
 
 /*
@@ -171,18 +178,18 @@ push(VALUE self, VALUE rb_node)
  *  if found, otherwise returns nil.
  */
 static VALUE
-delete (VALUE self, VALUE rb_node)
+delete (VALUE rb_self, VALUE rb_node)
 {
-  xmlNodeSetPtr node_set;
+  xmlNodeSetPtr c_self;
   xmlNodePtr node;
 
   Check_Node_Set_Node_Type(rb_node);
 
-  Data_Get_Struct(self, xmlNodeSet, node_set);
-  Data_Get_Struct(rb_node, xmlNode, node);
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
+  Noko_Node_Get_Struct(rb_node, xmlNode, node);
 
-  if (xmlXPathNodeSetContains(node_set, node)) {
-    xpath_node_set_del(node_set, node);
+  if (xmlXPathNodeSetContains(c_self, node)) {
+    xpath_node_set_del(c_self, node);
     return rb_node;
   }
   return Qnil ;
@@ -196,20 +203,20 @@ delete (VALUE self, VALUE rb_node)
  * Set Intersection — Returns a new NodeSet containing nodes common to the two NodeSets.
  */
 static VALUE
-intersection(VALUE self, VALUE rb_other)
+intersection(VALUE rb_self, VALUE rb_other)
 {
-  xmlNodeSetPtr node_set, other ;
+  xmlNodeSetPtr c_self, c_other ;
   xmlNodeSetPtr intersection;
 
   if (!rb_obj_is_kind_of(rb_other, cNokogiriXmlNodeSet)) {
     rb_raise(rb_eArgError, "node_set must be a Nokogiri::XML::NodeSet");
   }
 
-  Data_Get_Struct(self, xmlNodeSet, node_set);
-  Data_Get_Struct(rb_other, xmlNodeSet, other);
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
+  TypedData_Get_Struct(rb_other, xmlNodeSet, &xml_node_set_type, c_other);
 
-  intersection = xmlXPathIntersection(node_set, other);
-  return noko_xml_node_set_wrap(intersection, rb_iv_get(self, "@document"));
+  intersection = xmlXPathIntersection(c_self, c_other);
+  return noko_xml_node_set_wrap(intersection, rb_iv_get(rb_self, "@document"));
 }
 
 
@@ -220,17 +227,17 @@ intersection(VALUE self, VALUE rb_other)
  *  Returns true if any member of node set equals +node+.
  */
 static VALUE
-include_eh(VALUE self, VALUE rb_node)
+include_eh(VALUE rb_self, VALUE rb_node)
 {
-  xmlNodeSetPtr node_set;
+  xmlNodeSetPtr c_self;
   xmlNodePtr node;
 
   Check_Node_Set_Node_Type(rb_node);
 
-  Data_Get_Struct(self, xmlNodeSet, node_set);
-  Data_Get_Struct(rb_node, xmlNode, node);
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
+  Noko_Node_Get_Struct(rb_node, xmlNode, node);
 
-  return (xmlXPathNodeSetContains(node_set, node) ? Qtrue : Qfalse);
+  return (xmlXPathNodeSetContains(c_self, node) ? Qtrue : Qfalse);
 }
 
 
@@ -242,22 +249,22 @@ include_eh(VALUE self, VALUE rb_node)
  * set.
  */
 static VALUE
-rb_xml_node_set_union(VALUE rb_node_set, VALUE rb_other)
+rb_xml_node_set_union(VALUE rb_self, VALUE rb_other)
 {
-  xmlNodeSetPtr c_node_set, c_other;
+  xmlNodeSetPtr c_self, c_other;
   xmlNodeSetPtr c_new_node_set;
 
   if (!rb_obj_is_kind_of(rb_other, cNokogiriXmlNodeSet)) {
     rb_raise(rb_eArgError, "node_set must be a Nokogiri::XML::NodeSet");
   }
 
-  Data_Get_Struct(rb_node_set, xmlNodeSet, c_node_set);
-  Data_Get_Struct(rb_other, xmlNodeSet, c_other);
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
+  TypedData_Get_Struct(rb_other, xmlNodeSet, &xml_node_set_type, c_other);
 
-  c_new_node_set = xmlXPathNodeSetMerge(NULL, c_node_set);
+  c_new_node_set = xmlXPathNodeSetMerge(NULL, c_self);
   c_new_node_set = xmlXPathNodeSetMerge(c_new_node_set, c_other);
 
-  return noko_xml_node_set_wrap(c_new_node_set, rb_iv_get(rb_node_set, "@document"));
+  return noko_xml_node_set_wrap(c_new_node_set, rb_iv_get(rb_self, "@document"));
 }
 
 /*
@@ -268,9 +275,9 @@ rb_xml_node_set_union(VALUE rb_node_set, VALUE rb_other)
  *  each item that also appears in +node_set+
  */
 static VALUE
-minus(VALUE self, VALUE rb_other)
+minus(VALUE rb_self, VALUE rb_other)
 {
-  xmlNodeSetPtr node_set, other;
+  xmlNodeSetPtr c_self, c_other;
   xmlNodeSetPtr new;
   int j ;
 
@@ -278,55 +285,55 @@ minus(VALUE self, VALUE rb_other)
     rb_raise(rb_eArgError, "node_set must be a Nokogiri::XML::NodeSet");
   }
 
-  Data_Get_Struct(self, xmlNodeSet, node_set);
-  Data_Get_Struct(rb_other, xmlNodeSet, other);
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
+  TypedData_Get_Struct(rb_other, xmlNodeSet, &xml_node_set_type, c_other);
 
-  new = xmlXPathNodeSetMerge(NULL, node_set);
-  for (j = 0 ; j < other->nodeNr ; ++j) {
-    xpath_node_set_del(new, other->nodeTab[j]);
+  new = xmlXPathNodeSetMerge(NULL, c_self);
+  for (j = 0 ; j < c_other->nodeNr ; ++j) {
+    xpath_node_set_del(new, c_other->nodeTab[j]);
   }
 
-  return noko_xml_node_set_wrap(new, rb_iv_get(self, "@document"));
+  return noko_xml_node_set_wrap(new, rb_iv_get(rb_self, "@document"));
 }
 
 
 static VALUE
-index_at(VALUE self, long offset)
+index_at(VALUE rb_self, long offset)
 {
-  xmlNodeSetPtr node_set;
+  xmlNodeSetPtr c_self;
 
-  Data_Get_Struct(self, xmlNodeSet, node_set);
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
 
-  if (offset >= node_set->nodeNr || abs((int)offset) > node_set->nodeNr) {
+  if (offset >= c_self->nodeNr || abs((int)offset) > c_self->nodeNr) {
     return Qnil;
   }
 
-  if (offset < 0) { offset += node_set->nodeNr ; }
+  if (offset < 0) { offset += c_self->nodeNr ; }
 
-  return noko_xml_node_wrap_node_set_result(node_set->nodeTab[offset], self);
+  return noko_xml_node_wrap_node_set_result(c_self->nodeTab[offset], rb_self);
 }
 
 static VALUE
-subseq(VALUE self, long beg, long len)
+subseq(VALUE rb_self, long beg, long len)
 {
   long j;
-  xmlNodeSetPtr node_set;
+  xmlNodeSetPtr c_self;
   xmlNodeSetPtr new_set ;
 
-  Data_Get_Struct(self, xmlNodeSet, node_set);
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
 
-  if (beg > node_set->nodeNr) { return Qnil ; }
+  if (beg > c_self->nodeNr) { return Qnil ; }
   if (beg < 0 || len < 0) { return Qnil ; }
 
-  if ((beg + len) > node_set->nodeNr) {
-    len = node_set->nodeNr - beg ;
+  if ((beg + len) > c_self->nodeNr) {
+    len = c_self->nodeNr - beg ;
   }
 
   new_set = xmlXPathNodeSetCreate(NULL);
   for (j = beg ; j < beg + len ; ++j) {
-    xmlXPathNodeSetAddUnique(new_set, node_set->nodeTab[j]);
+    xmlXPathNodeSetAddUnique(new_set, c_self->nodeTab[j]);
   }
-  return noko_xml_node_set_wrap(new_set, rb_iv_get(self, "@document"));
+  return noko_xml_node_set_wrap(new_set, rb_iv_get(rb_self, "@document"));
 }
 
 /*
@@ -345,21 +352,21 @@ subseq(VALUE self, long beg, long len)
  * nil if the +index+ (or +start+) are out of range.
  */
 static VALUE
-slice(int argc, VALUE *argv, VALUE self)
+slice(int argc, VALUE *argv, VALUE rb_self)
 {
   VALUE arg ;
   long beg, len ;
-  xmlNodeSetPtr node_set;
+  xmlNodeSetPtr c_self;
 
-  Data_Get_Struct(self, xmlNodeSet, node_set);
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
 
   if (argc == 2) {
     beg = NUM2LONG(argv[0]);
     len = NUM2LONG(argv[1]);
     if (beg < 0) {
-      beg += node_set->nodeNr ;
+      beg += c_self->nodeNr ;
     }
-    return subseq(self, beg, len);
+    return subseq(rb_self, beg, len);
   }
 
   if (argc != 1) {
@@ -368,20 +375,20 @@ slice(int argc, VALUE *argv, VALUE self)
   arg = argv[0];
 
   if (FIXNUM_P(arg)) {
-    return index_at(self, FIX2LONG(arg));
+    return index_at(rb_self, FIX2LONG(arg));
   }
 
   /* if arg is Range */
-  switch (rb_range_beg_len(arg, &beg, &len, (long)node_set->nodeNr, 0)) {
+  switch (rb_range_beg_len(arg, &beg, &len, (long)c_self->nodeNr, 0)) {
     case Qfalse:
       break;
     case Qnil:
       return Qnil;
     default:
-      return subseq(self, beg, len);
+      return subseq(rb_self, beg, len);
   }
 
-  return index_at(self, NUM2LONG(arg));
+  return index_at(rb_self, NUM2LONG(arg));
 }
 
 
@@ -392,17 +399,17 @@ slice(int argc, VALUE *argv, VALUE self)
  * Return this list as an Array
  */
 static VALUE
-to_array(VALUE self)
+to_array(VALUE rb_self)
 {
-  xmlNodeSetPtr node_set ;
+  xmlNodeSetPtr c_self ;
   VALUE list;
   int i;
 
-  Data_Get_Struct(self, xmlNodeSet, node_set);
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
 
-  list = rb_ary_new2(node_set->nodeNr);
-  for (i = 0; i < node_set->nodeNr; i++) {
-    VALUE elt = noko_xml_node_wrap_node_set_result(node_set->nodeTab[i], self);
+  list = rb_ary_new2(c_self->nodeNr);
+  for (i = 0; i < c_self->nodeNr; i++) {
+    VALUE elt = noko_xml_node_wrap_node_set_result(c_self->nodeTab[i], rb_self);
     rb_ary_push(list, elt);
   }
 
@@ -416,25 +423,25 @@ to_array(VALUE self)
  * Unlink this NodeSet and all Node objects it contains from their current context.
  */
 static VALUE
-unlink_nodeset(VALUE self)
+unlink_nodeset(VALUE rb_self)
 {
-  xmlNodeSetPtr node_set;
+  xmlNodeSetPtr c_self;
   int j, nodeNr ;
 
-  Data_Get_Struct(self, xmlNodeSet, node_set);
+  TypedData_Get_Struct(rb_self, xmlNodeSet, &xml_node_set_type, c_self);
 
-  nodeNr = node_set->nodeNr ;
+  nodeNr = c_self->nodeNr ;
   for (j = 0 ; j < nodeNr ; j++) {
-    if (! NOKOGIRI_NAMESPACE_EH(node_set->nodeTab[j])) {
+    if (! NOKOGIRI_NAMESPACE_EH(c_self->nodeTab[j])) {
       VALUE node ;
       xmlNodePtr node_ptr;
-      node = noko_xml_node_wrap(Qnil, node_set->nodeTab[j]);
+      node = noko_xml_node_wrap(Qnil, c_self->nodeTab[j]);
       rb_funcall(node, rb_intern("unlink"), 0); /* modifies the C struct out from under the object */
-      Data_Get_Struct(node, xmlNode, node_ptr);
-      node_set->nodeTab[j] = node_ptr ;
+      Noko_Node_Get_Struct(node, xmlNode, node_ptr);
+      c_self->nodeTab[j] = node_ptr ;
     }
   }
-  return self ;
+  return rb_self ;
 }
 
 
@@ -445,23 +452,26 @@ noko_xml_node_set_wrap(xmlNodeSetPtr c_node_set, VALUE document)
   VALUE rb_node_set ;
 
   if (c_node_set == NULL) {
-    c_node_set = xmlXPathNodeSetCreate(NULL);
+    rb_node_set = xml_node_set_allocate(cNokogiriXmlNodeSet);
+  } else {
+    rb_node_set = TypedData_Wrap_Struct(cNokogiriXmlNodeSet, &xml_node_set_type, c_node_set);
   }
-
-  rb_node_set = Data_Wrap_Struct(cNokogiriXmlNodeSet, mark, deallocate, c_node_set);
 
   if (!NIL_P(document)) {
     rb_iv_set(rb_node_set, "@document", document);
     rb_funcall(document, decorate, 1, rb_node_set);
   }
 
-  /* make sure we create ruby objects for all the results, so they'll be marked during the GC mark phase */
-  for (j = 0 ; j < c_node_set->nodeNr ; j++) {
-    noko_xml_node_wrap_node_set_result(c_node_set->nodeTab[j], rb_node_set);
+  if (c_node_set) {
+    /* create ruby objects for all the results, so they'll be marked during the GC mark phase */
+    for (j = 0 ; j < c_node_set->nodeNr ; j++) {
+      noko_xml_node_wrap_node_set_result(c_node_set->nodeTab[j], rb_node_set);
+    }
   }
 
   return rb_node_set ;
 }
+
 
 VALUE
 noko_xml_node_wrap_node_set_result(xmlNodePtr node, VALUE node_set)
@@ -474,25 +484,35 @@ noko_xml_node_wrap_node_set_result(xmlNodePtr node, VALUE node_set)
 }
 
 
+xmlNodeSetPtr
+noko_xml_node_set_unwrap(VALUE rb_node_set)
+{
+  xmlNodeSetPtr c_node_set;
+  TypedData_Get_Struct(rb_node_set, xmlNodeSet, &xml_node_set_type, c_node_set);
+  return c_node_set;
+}
+
+
 void
 noko_init_xml_node_set(void)
 {
   cNokogiriXmlNodeSet = rb_define_class_under(mNokogiriXml, "NodeSet", rb_cObject);
 
-  rb_define_alloc_func(cNokogiriXmlNodeSet, allocate);
+  rb_define_alloc_func(cNokogiriXmlNodeSet, xml_node_set_allocate);
 
-  rb_define_method(cNokogiriXmlNodeSet, "length", length, 0);
-  rb_define_method(cNokogiriXmlNodeSet, "[]", slice, -1);
-  rb_define_method(cNokogiriXmlNodeSet, "slice", slice, -1);
-  rb_define_method(cNokogiriXmlNodeSet, "push", push, 1);
-  rb_define_method(cNokogiriXmlNodeSet, "|", rb_xml_node_set_union, 1);
-  rb_define_method(cNokogiriXmlNodeSet, "-", minus, 1);
-  rb_define_method(cNokogiriXmlNodeSet, "unlink", unlink_nodeset, 0);
-  rb_define_method(cNokogiriXmlNodeSet, "to_a", to_array, 0);
-  rb_define_method(cNokogiriXmlNodeSet, "dup", duplicate, 0);
-  rb_define_method(cNokogiriXmlNodeSet, "delete", delete, 1);
   rb_define_method(cNokogiriXmlNodeSet, "&", intersection, 1);
+  rb_define_method(cNokogiriXmlNodeSet, "-", minus, 1);
+  rb_define_method(cNokogiriXmlNodeSet, "[]", slice, -1);
+  rb_define_method(cNokogiriXmlNodeSet, "delete", delete, 1);
   rb_define_method(cNokogiriXmlNodeSet, "include?", include_eh, 1);
+  rb_define_method(cNokogiriXmlNodeSet, "length", length, 0);
+  rb_define_method(cNokogiriXmlNodeSet, "push", push, 1);
+  rb_define_method(cNokogiriXmlNodeSet, "slice", slice, -1);
+  rb_define_method(cNokogiriXmlNodeSet, "to_a", to_array, 0);
+  rb_define_method(cNokogiriXmlNodeSet, "unlink", unlink_nodeset, 0);
+  rb_define_method(cNokogiriXmlNodeSet, "|", rb_xml_node_set_union, 1);
+
+  rb_define_private_method(cNokogiriXmlNodeSet, "initialize_copy", rb_xml_node_set_initialize_copy, 1);
 
   decorate = rb_intern("decorate");
 }

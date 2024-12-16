@@ -1,49 +1,55 @@
 # -*- coding: utf-8 -*-
+# frozen_string_literal: true
 
 require "helper"
 
-class TestEncodingHandler < Nokogiri::TestCase
-  def teardown
+describe Nokogiri::EncodingHandler do
+  after do
     Nokogiri::EncodingHandler.clear_aliases!
-    #Replace default aliases removed by clear_aliases!
-    Nokogiri.install_default_aliases
-    super
+    Nokogiri::EncodingHandler.install_default_aliases
   end
 
-  def test_get
-    assert_not_nil Nokogiri::EncodingHandler['UTF-8']
-    assert_nil Nokogiri::EncodingHandler['alsdkjfhaldskjfh']
+  it :test_get do
+    refute_nil(Nokogiri::EncodingHandler["NOKOGIRI-SENTINEL"])
+    refute_nil(Nokogiri::EncodingHandler["ISO-2022-JP"])
+    assert_nil(Nokogiri::EncodingHandler["alsdkjfhaldskjfh"])
   end
 
-  def test_name
-    eh = Nokogiri::EncodingHandler['UTF-8']
-    assert_equal "UTF-8", eh.name
+  it :test_name do
+    eh = Nokogiri::EncodingHandler["ISO-2022-JP"]
+    assert_equal("ISO-2022-JP", eh.name)
   end
 
-  def test_alias
-    Nokogiri::EncodingHandler.alias('UTF-8', 'UTF-18')
-    assert_equal 'UTF-8', Nokogiri::EncodingHandler['UTF-18'].name
+  it :test_alias do
+    Nokogiri::EncodingHandler.alias("ISO-2022-JP", "UTF-18")
+    assert_equal("ISO-2022-JP", Nokogiri::EncodingHandler["UTF-18"].name)
   end
 
-  def test_cleanup_aliases
-    assert_nil Nokogiri::EncodingHandler['UTF-9']
-    Nokogiri::EncodingHandler.alias('UTF-8', 'UTF-9')
-    assert_not_nil Nokogiri::EncodingHandler['UTF-9']
+  it :test_cleanup_aliases do
+    assert_nil(Nokogiri::EncodingHandler["UTF-9"])
+    Nokogiri::EncodingHandler.alias("ISO-2022-JP", "UTF-9")
+    refute_nil(Nokogiri::EncodingHandler["UTF-9"])
 
     Nokogiri::EncodingHandler.clear_aliases!
-    assert_nil Nokogiri::EncodingHandler['UTF-9']
+    assert_nil(Nokogiri::EncodingHandler["UTF-9"])
   end
 
-  def test_delete
-    assert_nil Nokogiri::EncodingHandler['UTF-9']
-    Nokogiri::EncodingHandler.alias('UTF-8', 'UTF-9')
-    assert_not_nil Nokogiri::EncodingHandler['UTF-9']
+  it :test_delete do
+    assert_nil(Nokogiri::EncodingHandler["UTF-9"])
+    Nokogiri::EncodingHandler.alias("ISO-2022-JP", "UTF-9")
+    refute_nil(Nokogiri::EncodingHandler["UTF-9"])
 
-    Nokogiri::EncodingHandler.delete 'UTF-9'
-    assert_nil Nokogiri::EncodingHandler['UTF-9']
+    Nokogiri::EncodingHandler.delete("UTF-9")
+    assert_nil(Nokogiri::EncodingHandler["UTF-9"])
   end
 
-  def test_delete_non_existent
-    assert_nil Nokogiri::EncodingHandler.delete('UTF-9')
+  it :test_delete_non_existent do
+    assert_nil(Nokogiri::EncodingHandler.delete("UTF-9"))
+  end
+
+  it "deprecates Nokogiri.install_default_aliases" do
+    assert_output("", /deprecated/) do
+      Nokogiri.install_default_aliases
+    end
   end
 end

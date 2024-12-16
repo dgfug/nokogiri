@@ -9,9 +9,11 @@ import java.io.PipedReader;
 import java.io.PipedWriter;
 import java.io.StringReader;
 import java.util.Set;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Templates;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerConfigurationException;
@@ -22,8 +24,10 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 
-import org.apache.xalan.transformer.TransformerImpl;
 import org.apache.xml.serializer.SerializationHandler;
+import org.apache.xml.serializer.Serializer;
+import org.apache.xml.serializer.SerializerFactory;
+
 import org.jruby.Ruby;
 import org.jruby.RubyArray;
 import org.jruby.RubyClass;
@@ -48,6 +52,7 @@ import nokogiri.internals.NokogiriXsltErrorListener;
 @JRubyClass(name = "Nokogiri::XSLT::Stylesheet")
 public class XsltStylesheet extends RubyObject
 {
+  private static final long serialVersionUID = 1L;
 
   private TransformerFactory factory = null;
   private Templates sheet = null;
@@ -75,36 +80,33 @@ public class XsltStylesheet extends RubyObject
   private void
   addParametersToTransformer(ThreadContext context, Transformer transf, IRubyObject parameters)
   {
-    Ruby runtime = context.getRuntime();
-
     if (parameters instanceof RubyHash) {
       setHashParameters(transf, (RubyHash)parameters);
     } else if (parameters instanceof RubyArray) {
-      setArrayParameters(transf, runtime, (RubyArray)parameters);
+      setArrayParameters(transf, context, (RubyArray)parameters);
     } else {
-      throw runtime.newTypeError("parameters should be given either Array or Hash");
+      throw context.getRuntime().newTypeError("parameters should be given either Array or Hash");
     }
   }
 
+  @SuppressWarnings("unchecked")
   private void
   setHashParameters(Transformer transformer, RubyHash hash)
   {
-    Set<String> keys = hash.keySet();
-    for (String key : keys) {
-      String value = (String)hash.get(key);
-      transformer.setParameter(key, unparseValue(value));
+    for (Map.Entry<Object, Object> entry : (Set<Map.Entry<Object, Object>>)hash.entrySet()) {
+      transformer.setParameter((String)entry.getKey(), unparseValue((String)entry.getValue()));
     }
   }
 
   private void
-  setArrayParameters(Transformer transformer, Ruby runtime, RubyArray params)
+  setArrayParameters(Transformer transformer, ThreadContext context, RubyArray<?> params)
   {
     int limit = params.getLength();
     if (limit % 2 == 1) { limit--; }
 
     for (int i = 0; i < limit; i += 2) {
-      String name = params.aref(runtime.newFixnum(i)).asJavaString();
-      String value = params.aref(runtime.newFixnum(i + 1)).asJavaString();
+      String name = params.aref(context, context.getRuntime().newFixnum(i)).asJavaString();
+      String value = params.aref(context, context.getRuntime().newFixnum(i + 1)).asJavaString();
       transformer.setParameter(name, unparseValue(value));
     }
   }
@@ -133,7 +135,7 @@ public class XsltStylesheet extends RubyObject
     XmlDocument xmlDoc = (XmlDocument) args[0];
     ensureDocumentHasNoError(context, xmlDoc);
 
-    Document doc = ((XmlDocument) xmlDoc.dup_implementation(context, true)).getDocument();
+    Document doc = ((XmlDocument)xmlDoc.callMethod(context, "dup", runtime.newFixnum(1))).getDocument();
 
     XsltStylesheet xslt =
       (XsltStylesheet) NokogiriService.XSLT_STYLESHEET_ALLOCATOR.allocate(runtime, (RubyClass)klazz);
@@ -168,7 +170,7 @@ public class XsltStylesheet extends RubyObject
   ensureDocumentHasNoError(ThreadContext context, XmlDocument xmlDoc)
   {
     Ruby runtime = context.getRuntime();
-    RubyArray errors_of_xmlDoc = (RubyArray) xmlDoc.getInstanceVariable("@errors");
+    RubyArray<?> errors_of_xmlDoc = (RubyArray) xmlDoc.getInstanceVariable("@errors");
     if (!errors_of_xmlDoc.isEmpty()) {
       throw runtime.newRuntimeError(errors_of_xmlDoc.first().asString().asJavaString());
     }
@@ -176,14 +178,20 @@ public class XsltStylesheet extends RubyObject
 
   @JRubyMethod
   public IRubyObject
-  serialize(ThreadContext context, IRubyObject doc) throws IOException, TransformerException
+  serialize(ThreadContext context, IRubyObject doc) throws IOException
   {
     XmlDocument xmlDoc = (XmlDocument) doc;
-    TransformerImpl transformer = (TransformerImpl) this.sheet.newTransformer();
     ByteArrayOutputStream writer = new ByteArrayOutputStream();
-    StreamResult streamResult = new StreamResult(writer);
-    SerializationHandler serializationHandler = transformer.createSerializationHandler(streamResult);
-    serializationHandler.serialize(xmlDoc.getNode());
+
+    java.util.Properties props = this.sheet.getOutputProperties();
+    if (props.getProperty(OutputKeys.METHOD) == null) {
+      props.setProperty(OutputKeys.METHOD, org.apache.xml.serializer.Method.UNKNOWN);
+    }
+
+    Serializer serializer = SerializerFactory.getSerializer(props);
+    serializer.setOutputStream(writer);
+    ((SerializationHandler) serializer).serialize(xmlDoc.getNode());
+
     return context.getRuntime().newString(writer.toString());
   }
 
@@ -329,7 +337,7 @@ public class XsltStylesheet extends RubyObject
       RubyClass xmlDocumentClass = getNokogiriClass(runtime, "Nokogiri::XML::Document");
       XmlDocument xmlDocument = (XmlDocument) Helpers.invoke(context, xmlDocumentClass, "parse", args);
       if (((Document)xmlDocument.getNode()).getDocumentElement() == null) {
-        RubyArray errors = (RubyArray) xmlDocument.getInstanceVariable("@errors");
+        RubyArray<?> errors = (RubyArray) xmlDocument.getInstanceVariable("@errors");
         Helpers.invoke(context, errors, "<<", args[0]);
       }
       return xmlDocument;
@@ -341,18 +349,5 @@ public class XsltStylesheet extends RubyObject
   {
     if (arg instanceof XmlDocument) { return; }
     throw runtime.newArgumentError("argument must be a Nokogiri::XML::Document");
-  }
-
-  @JRubyMethod(name = {"registr", "register"}, meta = true)
-  public static IRubyObject
-  register(ThreadContext context, IRubyObject cls, IRubyObject uri, IRubyObject receiver)
-  {
-    throw context.getRuntime().newNotImplementedError("Nokogiri::XSLT.register method is not implemented");
-    /* When API conflict is solved, this method should be below:
-    // ThreadContext is used while executing xslt extension function
-    registry.put("context", context);
-    registry.put("receiver", receiver);
-    return context.getRuntime().getNil();
-    */
   }
 }

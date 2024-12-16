@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "gumbo.h"
+#include "nokogiri_gumbo.h"
 #include "insertion_mode.h"
 #include "string_buffer.h"
 #include "token_type.h"
@@ -95,12 +95,16 @@ typedef struct GumboInternalParserError {
   // The HTML tag of the input token. TAG_UNKNOWN if this was not a tag token.
   GumboTag input_tag;
 
+  // The HTML tag of the input token if it was nonstandard tag token. NULL otherwise.
+  char *input_name;
+
   // The insertion mode that the parser was in at the time.
   GumboInsertionMode parser_state;
 
   // The tag stack at the point of the error. Note that this is an GumboVector
   // of GumboTag's *stored by value* - cast the void* to an GumboTag directly to
-  // get at the tag.
+  // get at the tag. For nonstandard tags, this is a pointer to an owned char *
+  // containing the tag name.
   GumboVector /* GumboTag */ tag_stack;
 } GumboParserError;
 

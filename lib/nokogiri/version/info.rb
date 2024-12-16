@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require "singleton"
 require "shellwords"
 
@@ -93,27 +94,31 @@ module Nokogiri
           nokogiri["version"] = Nokogiri::VERSION
 
           unless jruby?
-            #  enable gems like nokogumbo to build with the following in their extconf.rb:
+            #  enable gems to build against Nokogiri with the following in their extconf.rb:
             #
             #    append_cflags(Nokogiri::VERSION_INFO["nokogiri"]["cppflags"])
             #    append_ldflags(Nokogiri::VERSION_INFO["nokogiri"]["ldflags"])
+            #
+            #  though, this won't work on all platform and versions of Ruby, and won't be supported
+            #  forever, see https://github.com/sparklemotion/nokogiri/discussions/2746 for context.
             #
             cppflags = ["-I#{header_directory.shellescape}"]
             ldflags = []
 
             if libxml2_using_packaged?
-              cppflags << "-I#{File.join(header_directory, 'include').shellescape}"
-              cppflags << "-I#{File.join(header_directory, 'include/libxml2').shellescape}"
+              cppflags << "-I#{File.join(header_directory, "include").shellescape}"
+              cppflags << "-I#{File.join(header_directory, "include/libxml2").shellescape}"
+            end
 
-              if windows?
-                # on windows, nokogumbo needs to link against nokogiri.so to resolve symbols. see #2167
-                lib_directory = File.expand_path(File.join(File.dirname(__FILE__), "../#{ruby_minor}"))
-                unless File.exist?(lib_directory)
-                  lib_directory = File.expand_path(File.join(File.dirname(__FILE__), ".."))
-                end
-                ldflags << "-L#{lib_directory.shellescape}"
-                ldflags << "-l:nokogiri.so"
+            if windows?
+              # on windows, third party libraries that wish to link against nokogiri
+              # should link against nokogiri.so to resolve symbols. see #2167
+              lib_directory = File.expand_path(File.join(File.dirname(__FILE__), "../#{ruby_minor}"))
+              unless File.exist?(lib_directory)
+                lib_directory = File.expand_path(File.join(File.dirname(__FILE__), ".."))
               end
+              ldflags << "-L#{lib_directory.shellescape}"
+              ldflags << "-l:nokogiri.so"
             end
 
             nokogiri["cppflags"] = cppflags
@@ -135,9 +140,6 @@ module Nokogiri
               libxml["source"] = "packaged"
               libxml["precompiled"] = libxml2_precompiled?
               libxml["patches"] = Nokogiri::LIBXML2_PATCHES
-
-              # this is for nokogumbo and shouldn't be forever
-              libxml["libxml2_path"] = header_directory
             else
               libxml["source"] = "system"
             end
@@ -168,21 +170,18 @@ module Nokogiri
           vi["other_libraries"] = Hash[*Nokogiri::OTHER_LIBRARY_VERSIONS.split(/[,:]/)]
         elsif jruby?
           vi["other_libraries"] = {}.tap do |ol|
-            ol["xerces"] = Nokogiri::XERCES_VERSION
-            ol["nekohtml"] = Nokogiri::NEKO_VERSION
+            Nokogiri::JAR_DEPENDENCIES.each do |k, v|
+              ol[k] = v
+            end
           end
         end
       end
     end
 
     def to_markdown
-      begin
-        require "psych"
-      rescue LoadError
-      end
       require "yaml"
       "# Nokogiri (#{Nokogiri::VERSION})\n" +
-      YAML.dump(to_hash).each_line.map { |line| "    #{line}" }.join
+        YAML.dump(to_hash).each_line.map { |line| "    #{line}" }.join
     end
 
     instance.warnings.each do |warning|
@@ -190,26 +189,36 @@ module Nokogiri
     end
   end
 
-  def self.uses_libxml?(requirement = nil) # :nodoc:
+  # :nodoc:
+  def self.uses_libxml?(requirement = nil)
     return false unless VersionInfo.instance.libxml2?
     return true unless requirement
+
     Gem::Requirement.new(requirement).satisfied_by?(VersionInfo.instance.loaded_libxml_version)
   end
 
+  # :nodoc:
   def self.uses_gumbo?
     uses_libxml? # TODO: replace with Gumbo functionality
   end
 
-  def self.jruby? # :nodoc:
+  # :nodoc:
+  def self.jruby?
     VersionInfo.instance.jruby?
   end
 
-  # Ensure constants used in this file are loaded - see #1896
-  if Nokogiri.jruby?
-    require_relative "../jruby/dependencies"
+  # :nodoc:
+  def self.libxml2_patches
+    if VersionInfo.instance.libxml2_using_packaged?
+      Nokogiri::VERSION_INFO["libxml"]["patches"]
+    else
+      []
+    end
   end
+
+  require_relative "../jruby/dependencies" if Nokogiri.jruby?
   require_relative "../extension"
 
-  # More complete version information about libxml
+  # Detailed version info about Nokogiri and the installed extension dependencies.
   VERSION_INFO = VersionInfo.instance.to_hash
 end

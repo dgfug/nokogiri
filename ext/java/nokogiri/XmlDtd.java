@@ -34,10 +34,11 @@ import nokogiri.internals.SaveContextVisitor;
  * @author Patrick Mahoney <pat@polycrystal.org>
  * @author Yoko Harada <yokolet@gmail.com>
  */
-
 @JRubyClass(name = "Nokogiri::XML::DTD", parent = "Nokogiri::XML::Node")
 public class XmlDtd extends XmlNode
 {
+  private static final long serialVersionUID = 1L;
+
   /** cache of children, Nokogiri::XML::NodeSet */
   protected IRubyObject children = null;
 
@@ -140,7 +141,7 @@ public class XmlDtd extends XmlNode
    *
    * NekoDTD parser returns a new document node containing elements
    * representing the dtd declarations. The plan is to get the root
-   * element and adopt it into the correct document, stipping the
+   * element and adopt it into the correct document, stripping the
    * Document provided by NekoDTD.
    *
    */
@@ -331,7 +332,7 @@ public class XmlDtd extends XmlNode
   public IRubyObject
   validate(ThreadContext context, IRubyObject doc)
   {
-    RubyArray errors = RubyArray.newArray(context.getRuntime());
+    RubyArray<?> errors = RubyArray.newArray(context.getRuntime());
     if (doc instanceof XmlDocument) {
       errors = (RubyArray)((XmlDocument)doc).getInstanceVariable("@errors");
     }
@@ -416,7 +417,7 @@ public class XmlDtd extends XmlNode
     children = XmlNodeSet.newNodeSet(runtime, extractDecls(context, node.getFirstChild()));
 
     // add attribute decls as attributes to the matching element decl
-    RubyArray keys = attributes.keys();
+    RubyArray<?> keys = attributes.keys();
     for (int i = 0; i < keys.getLength(); ++i) {
       IRubyObject akey = keys.entry(i);
       IRubyObject val;
@@ -453,7 +454,7 @@ public class XmlDtd extends XmlNode
    * This recursive function will not descend into an
    * 'externalSubset' node, thus for an internal subset it only
    * extracts nodes in the internal subset, and for an external
-   * subset it extracts everything and assumess <code>node</code>
+   * subset it extracts everything and assumes <code>node</code>
    * and all children are part of the external subset.
    */
   protected IRubyObject[]

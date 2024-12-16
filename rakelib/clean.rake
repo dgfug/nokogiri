@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "rake/clean"
 CLEAN.add(
   "coverage",
@@ -8,4 +10,3 @@ CLEAN.add(
   "tmp",
 )
 CLOBBER.add("ports/*").exclude(%r{ports/archives$})
-CLOBBER.add("gems")

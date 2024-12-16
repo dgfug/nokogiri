@@ -1,45 +1,35 @@
 # frozen_string_literal: true
+
 module Nokogiri
   class << self
-    ###
-    # Parse XML.  Convenience method for Nokogiri::XML::Document.parse
-    def XML(thing, url = nil, encoding = nil, options = XML::ParseOptions::DEFAULT_XML, &block)
-      Nokogiri::XML::Document.parse(thing, url, encoding, options, &block)
+    # Convenience method for Nokogiri::XML::Document.parse
+    def XML(...)
+      Nokogiri::XML::Document.parse(...)
     end
   end
 
   module XML
     # Original C14N 1.0 spec canonicalization
-    XML_C14N_1_0 =       0
+    XML_C14N_1_0 = 0
     # Exclusive C14N 1.0 spec canonicalization
     XML_C14N_EXCLUSIVE_1_0 = 1
     # C14N 1.1 spec canonicalization
     XML_C14N_1_1 = 2
+
     class << self
-      ###
-      # Parse an XML document using the Nokogiri::XML::Reader API.  See
-      # Nokogiri::XML::Reader for mor information
-      def Reader(string_or_io, url = nil, encoding = nil, options = ParseOptions::STRICT)
-        options = Nokogiri::XML::ParseOptions.new(options) if Integer === options
-        # Give the options to the user
-        yield options if block_given?
-
-        if string_or_io.respond_to?(:read)
-          return Reader.from_io(string_or_io, url, encoding, options.to_i)
-        end
-        Reader.from_memory(string_or_io, url, encoding, options.to_i)
+      # Convenience method for Nokogiri::XML::Reader.new
+      def Reader(...)
+        Reader.new(...)
       end
 
-      ###
-      # Parse XML.  Convenience method for Nokogiri::XML::Document.parse
-      def parse(thing, url = nil, encoding = nil, options = ParseOptions::DEFAULT_XML, &block)
-        Document.parse(thing, url, encoding, options, &block)
+      # Convenience method for Nokogiri::XML::Document.parse
+      def parse(...)
+        Document.parse(...)
       end
 
-      ####
-      # Parse a fragment from +string+ in to a NodeSet.
-      def fragment(string)
-        XML::DocumentFragment.parse(string)
+      # Convenience method for Nokogiri::XML::DocumentFragment.parse
+      def fragment(...)
+        XML::DocumentFragment.parse(...)
       end
     end
   end

@@ -44,7 +44,7 @@ entities(VALUE self)
   xmlDtdPtr dtd;
   VALUE hash;
 
-  Data_Get_Struct(self, xmlDtd, dtd);
+  Noko_Node_Get_Struct(self, xmlDtd, dtd);
 
   if (!dtd->entities) { return Qnil; }
 
@@ -57,9 +57,9 @@ entities(VALUE self)
 
 /*
  * call-seq:
- *   notations
+ *   notations() → Hash<name(String)⇒Notation>
  *
- * Get a hash of the notations for this DTD.
+ * [Returns] All the notations for this DTD in a Hash of Notation +name+ to Notation.
  */
 static VALUE
 notations(VALUE self)
@@ -67,7 +67,7 @@ notations(VALUE self)
   xmlDtdPtr dtd;
   VALUE hash;
 
-  Data_Get_Struct(self, xmlDtd, dtd);
+  Noko_Node_Get_Struct(self, xmlDtd, dtd);
 
   if (!dtd->notations) { return Qnil; }
 
@@ -90,7 +90,7 @@ attributes(VALUE self)
   xmlDtdPtr dtd;
   VALUE hash;
 
-  Data_Get_Struct(self, xmlDtd, dtd);
+  Noko_Node_Get_Struct(self, xmlDtd, dtd);
 
   hash = rb_hash_new();
 
@@ -113,7 +113,7 @@ elements(VALUE self)
   xmlDtdPtr dtd;
   VALUE hash;
 
-  Data_Get_Struct(self, xmlDtd, dtd);
+  Noko_Node_Get_Struct(self, xmlDtd, dtd);
 
   if (!dtd->elements) { return Qnil; }
 
@@ -138,13 +138,13 @@ validate(VALUE self, VALUE document)
   xmlValidCtxtPtr ctxt;
   VALUE error_list;
 
-  Data_Get_Struct(self, xmlDtd, dtd);
-  Data_Get_Struct(document, xmlDoc, doc);
+  Noko_Node_Get_Struct(self, xmlDtd, dtd);
+  doc = noko_xml_document_unwrap(document);
   error_list = rb_ary_new();
 
   ctxt = xmlNewValidCtxt();
 
-  xmlSetStructuredErrorFunc((void *)error_list, Nokogiri_error_array_pusher);
+  xmlSetStructuredErrorFunc((void *)error_list, noko__error_array_pusher);
 
   xmlValidateDtd(ctxt, doc, dtd);
 
@@ -165,7 +165,7 @@ static VALUE
 system_id(VALUE self)
 {
   xmlDtdPtr dtd;
-  Data_Get_Struct(self, xmlDtd, dtd);
+  Noko_Node_Get_Struct(self, xmlDtd, dtd);
 
   if (!dtd->SystemID) { return Qnil; }
 
@@ -182,7 +182,7 @@ static VALUE
 external_id(VALUE self)
 {
   xmlDtdPtr dtd;
-  Data_Get_Struct(self, xmlDtd, dtd);
+  Noko_Node_Get_Struct(self, xmlDtd, dtd);
 
   if (!dtd->ExternalID) { return Qnil; }
 
@@ -190,7 +190,7 @@ external_id(VALUE self)
 }
 
 void
-noko_init_xml_dtd()
+noko_init_xml_dtd(void)
 {
   assert(cNokogiriXmlNode);
   /*

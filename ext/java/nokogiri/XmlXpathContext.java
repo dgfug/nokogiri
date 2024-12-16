@@ -39,6 +39,8 @@ import static nokogiri.internals.NokogiriHelpers.nodeListToRubyArray;
 @JRubyClass(name = "Nokogiri::XML::XPathContext")
 public class XmlXpathContext extends RubyObject
 {
+  private static final long serialVersionUID = 1L;
+
   static
   {
     final String DTMManager = "org.apache.xml.dtm.DTMManager";
@@ -177,7 +179,7 @@ public class XmlXpathContext extends RubyObject
     final NokogiriXPathFunctionResolver fnResolver = NokogiriXPathFunctionResolver.create(handler);
     try {
       return tryGetNodeSet(context, expr, fnResolver);
-    } catch (TransformerException ex) {
+    } catch (TransformerException | RuntimeException ex) {
       throw XmlSyntaxError.createXMLXPathSyntaxError(context.runtime,
           (expr + ": " + ex.toString()),
           ex).toThrowable();

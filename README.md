@@ -2,7 +2,7 @@
 
 # Nokogiri
 
-Nokogiri (鋸) makes it easy and painless to work with XML and HTML from Ruby. It provides a sensible, easy-to-understand API for [reading](https://nokogiri.org/tutorials/parsing_an_html_xml_document.html), writing, [modifying](https://nokogiri.org/tutorials/modifying_an_html_xml_document.html), and [querying](https://nokogiri.org/tutorials/searching_a_xml_html_document.html) documents. It is fast and standards-compliant by relying on native parsers like libxml2 (C) and xerces (Java).
+Nokogiri (鋸) makes it easy and painless to work with XML and HTML from Ruby. It provides a sensible, easy-to-understand API for [reading](https://nokogiri.org/tutorials/parsing_an_html_xml_document.html), writing, [modifying](https://nokogiri.org/tutorials/modifying_an_html_xml_document.html), and [querying](https://nokogiri.org/tutorials/searching_a_xml_html_document.html) documents. It is fast and standards-compliant by relying on native parsers like libxml2, libgumbo, and xerces.
 
 ## Guiding Principles
 
@@ -30,17 +30,15 @@ Some guiding principles Nokogiri tries to follow:
 [![Appveyor CI](https://ci.appveyor.com/api/projects/status/xj2pqwvlxwuwgr06/branch/main?svg=true)](https://ci.appveyor.com/project/flavorjones/nokogiri/branch/main)
 
 [![Gem Version](https://badge.fury.io/rb/nokogiri.svg)](https://rubygems.org/gems/nokogiri)
-[![SemVer compatibility](https://api.dependabot.com/badges/compatibility_score?dependency-name=nokogiri&package-manager=bundler&version-scheme=semver)](https://dependabot.com/compatibility-score/?dependency-name=nokogiri&package-manager=bundler)
+[![SemVer compatibility](https://dependabot-badges.githubapp.com/badges/compatibility_score?dependency-name=nokogiri&package-manager=bundler&previous-version=1.11.7&new-version=1.12.5)](https://docs.github.com/en/code-security/supply-chain-security/managing-vulnerabilities-in-your-projects-dependencies/about-dependabot-security-updates#about-compatibility-scores)
+
+[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/5344/badge)](https://bestpractices.coreinfrastructure.org/projects/5344)
 [![Tidelift dependencies](https://tidelift.com/badges/package/rubygems/nokogiri)](https://tidelift.com/subscription/pkg/rubygems-nokogiri?utm_source=rubygems-nokogiri&utm_medium=referral&utm_campaign=readme)
 
 
 ## Support, Getting Help, and Reporting Issues
 
 All official documentation is posted at https://nokogiri.org (the source for which is at https://github.com/sparklemotion/nokogiri.org/, and we welcome contributions).
-
-Consider subscribing to [Tidelift][tidelift] which provides license assurances and timely security notifications for your open source dependencies, including Nokogiri. [Tidelift][tidelift] subscriptions also help the Nokogiri maintainers fund our [automated testing](https://ci.nokogiri.org) which in turn allows us to ship releases, bugfixes, and security updates more often.
-
-  [tidelift]: https://tidelift.com/subscription/pkg/rubygems-nokogiri?utm_source=rubygems-nokogiri&utm_medium=referral&utm_campaign=readme
 
 ### Reading
 
@@ -55,9 +53,9 @@ Your first stops for learning more about Nokogiri should be:
 
 There are a few ways to ask exploratory questions:
 
-- The Ruby Discord chat server is active at https://discord.gg/UyQnKrT
 - The Nokogiri mailing list is active at https://groups.google.com/group/nokogiri-talk
 - Open an issue using the "Help Request" template at https://github.com/sparklemotion/nokogiri/issues
+- Open a discussion at https://github.com/sparklemotion/nokogiri/discussions
 
 Please do not mail the maintainers at their personal addresses.
 
@@ -78,7 +76,7 @@ Full information and description of our security policy is in [`SECURITY.md`](SE
 
 ### Semantic Versioning Policy
 
-Nokogiri follows [Semantic Versioning](https://semver.org/) (since 2017 or so). [![Dependabot's SemVer compatibility score for Nokogiri](https://api.dependabot.com/badges/compatibility_score?dependency-name=nokogiri&package-manager=bundler&version-scheme=semver)](https://dependabot.com/compatibility-score/?dependency-name=nokogiri&package-manager=bundler)
+Nokogiri follows [Semantic Versioning](https://semver.org/) (since 2017 or so). [![Dependabot's SemVer compatibility score for Nokogiri](https://dependabot-badges.githubapp.com/badges/compatibility_score?dependency-name=nokogiri&package-manager=bundler&previous-version=1.11.7&new-version=1.12.5)](https://docs.github.com/en/code-security/supply-chain-security/managing-vulnerabilities-in-your-projects-dependencies/about-dependabot-security-updates#about-compatibility-scores)
 
 We bump `Major.Minor.Patch` versions following this guidance:
 
@@ -93,6 +91,8 @@ We bump `Major.Minor.Patch` versions following this guidance:
 - Updating packaged libraries for non-security-related reasons.
 - Dropping support for EOLed Ruby versions. [Some folks find this objectionable](https://github.com/sparklemotion/nokogiri/issues/1568), but [SemVer says this is OK if the public API hasn't changed](https://semver.org/#what-should-i-do-if-i-update-my-own-dependencies-without-changing-the-public-api).
 - Backwards-incompatible changes to internal or private methods and constants. These are detailed in the "Changes" section of each changelog entry.
+- Removal of deprecated methods or parameters, after a generous transition period; usually when those methods or parameters are rarely-used or dangerous to the user. Essentially, removals that do not justify a major version bump.
+
 
 `Patch`:
 
@@ -101,12 +101,25 @@ We bump `Major.Minor.Patch` versions following this guidance:
 - Updating packaged libraries for security-related reasons.
 
 
+### Sponsorship
+
+You can help sponsor the maintainers of this software through one of these organizations:
+
+- [github.com/sponsors/flavorjones](https://github.com/sponsors/flavorjones)
+- [opencollective.com/nokogiri](https://opencollective.com/nokogiri)
+- [tidelift.com/subscription/pkg/rubygems-nokogiri](https://tidelift.com/subscription/pkg/rubygems-nokogiri?utm_source=rubygems-nokogiri&utm_medium=referral&utm_campaign=readme)
+
+
 ## Installation
 
 Requirements:
 
-- Ruby >= 2.5
-- JRuby >= 9.2.0.0
+- Ruby >= 3.1
+- JRuby >= 9.4.0.0
+
+If you are compiling the native extension against a system version of libxml2:
+
+- libxml2 >= 2.9.2 (recommended >= 2.12.0)
 
 
 ### Native Gems: Faster, more reliable installation
@@ -115,12 +128,14 @@ Requirements:
 
 ### Supported Platforms
 
-As of v1.11.0, Nokogiri ships pre-compiled, "native" gems for the following platforms:
+Nokogiri ships pre-compiled, "native" gems for the following platforms:
 
-- Linux: `x86-linux` and `x86_64-linux` (req: `glibc >= 2.17`), including musl platforms like Alpine
+- Linux:
+  - `x86_64-linux-gnu`, `aarch64-linux-gnu`, and `arm-linux-gnu` (req: `glibc >= 2.29`)
+  - `x86_64-linux-musl`, `aarch64-linux-musl`, and `arm-linux-musl`
 - Darwin/MacOS: `x86_64-darwin` and `arm64-darwin`
-- Windows: `x86-mingw32` and `x64-mingw32`
-- Java: any platform running JRuby 9.2 or higher
+- Windows: `x64-mingw-ucrt`
+- Java: any platform running JRuby 9.4 or higher
 
 To determine whether your system supports one of these gems, look at the output of `bundle platform` or `ruby -e 'puts Gem::Platform.local.to_s'`.
 

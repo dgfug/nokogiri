@@ -51,10 +51,11 @@ import nokogiri.internals.c14n.Canonicalizer;
  * @author Yoko Harada <yokolet@gmail.com>
  * @author John Shahid <jvshahid@gmail.com>
  */
-
 @JRubyClass(name = "Nokogiri::XML::Document", parent = "Nokogiri::XML::Node")
 public class XmlDocument extends XmlNode
 {
+  private static final long serialVersionUID = 1L;
+
   private NokogiriNamespaceCache nsCache;
 
   /* UserData keys for storing extra info in the document node. */
@@ -413,20 +414,13 @@ public class XmlDocument extends XmlNode
     return getCachedNodeOrCreate(context.runtime, rootNode);
   }
 
-  protected IRubyObject
-  dup_implementation(Ruby runtime, boolean deep)
+  @JRubyMethod(visibility = Visibility.PROTECTED)
+  public IRubyObject
+  initialize_copy_with_args(ThreadContext context, IRubyObject other, IRubyObject level)
   {
-    XmlDocument doc = (XmlDocument) super.dup_implementation(runtime, deep);
-    // Avoid creating a new XmlDocument since we cloned one
-    // already. Otherwise the following test will fail:
-    //
-    //   dup = doc.dup
-    //   dup.equal?(dup.children[0].document)
-    //
-    // Since `dup.children[0].document' will end up creating a new
-    // XmlDocument.  See #1060.
-    doc.resetCache();
-    return doc;
+    super.initialize_copy_with_args(context, other, level, null);
+    resetCache();
+    return this;
   }
 
   @JRubyMethod(name = "root=")
@@ -600,7 +594,7 @@ public class XmlDocument extends XmlNode
   public static IRubyObject
   wrap(ThreadContext context, IRubyObject klass, IRubyObject arg)
   {
-    XmlDocument xmlDocument = new XmlDocument(context.runtime, (RubyClass) klass, (Document) arg.toJava(Document.class));
+    XmlDocument xmlDocument = new XmlDocument(context.runtime, (RubyClass) klass, arg.toJava(Document.class));
     Helpers.invoke(context, xmlDocument, "initialize");
     return xmlDocument;
   }
@@ -680,11 +674,9 @@ public class XmlDocument extends XmlNode
         result = canonicalizer.canonicalizeSubtree(startingNode.getNode(), inclusive_namespace, filter);
       }
       return RubyString.newString(context.runtime, new ByteList(result, UTF8Encoding.INSTANCE));
-    } catch (CanonicalizationException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+    } catch (Exception e) {
+      throw context.getRuntime().newRuntimeError(e.getMessage());
     }
-    return context.nil;
   }
 
   private XmlNode

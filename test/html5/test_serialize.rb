@@ -1,5 +1,6 @@
 # encoding: utf-8
 # frozen_string_literal: true
+
 require "helper"
 
 class TestHtml5Serialize < Nokogiri::TestCase
@@ -27,7 +28,7 @@ class TestHtml5Serialize < Nokogiri::TestCase
         x</listing>
         </div>
         </div>
-        EOF
+      EOF
       Nokogiri::HTML5(html)
     end
     @initial_linefeed_pre
@@ -47,7 +48,7 @@ class TestHtml5Serialize < Nokogiri::TestCase
     assert_equal(expected, inner.inner_html)
   end
 
-  %w[pre textarea listing].each do |tag|
+  ["pre", "textarea", "listing"].each do |tag|
     define_method("test_initial_linefeed_#{tag}1".to_sym) do
       elem = initial_linefeed_pre.at("//*[@id=\"#{tag}1\"]")
       refute_nil elem
@@ -197,7 +198,7 @@ class TestHtml5Serialize < Nokogiri::TestCase
   # https://github.com/web-platform-tests/wpt/blob/master/html/syntax/serializing-html-fragments/serializing.html
   def serializing_test_data
     @serializing_test_data ||= begin
-      html = <<~EOF.gsub(/        /, "")
+      html = <<~EOF.gsub("        ", "")
         <!DOCTYPE html>
         <div id="test" style="display:none">
         <span></span>
@@ -229,7 +230,7 @@ class TestHtml5Serialize < Nokogiri::TestCase
         <span><a><b><c></c></b><d>e</d><f><g>h</g></f></a></span>
         <span b=c></span>
         </div>
-        EOF
+      EOF
       Nokogiri::HTML5(html).xpath("/html/body/div/*")
     end
     @serializing_test_data
@@ -254,8 +255,8 @@ class TestHtml5Serialize < Nokogiri::TestCase
     ["&gt;", "<span>&gt;</span>"],
     ["\"", "<span>\"</span>"],
     ["<style><&></style>", "<span><style><&></style></span>"],
-    ["<script type=\"test\"><&><\/script>", "<span><script type=\"test\"><&><\/script></span>"],
-    ["<&>", "<script type=\"test\"><&><\/script>"],
+    ["<script type=\"test\"><&></script>", "<span><script type=\"test\"><&></script></span>"],
+    ["<&>", "<script type=\"test\"><&></script>"],
     ["<xmp><&></xmp>", "<span><xmp><&></xmp></span>"],
     ["<iframe><&></iframe>", "<span><iframe><&></iframe></span>"],
     ["<noembed><&></noembed>", "<span><noembed><&></noembed></span>"],
@@ -267,187 +268,230 @@ class TestHtml5Serialize < Nokogiri::TestCase
   ].freeze
 
   DOM_TESTS = [
-    ["Attribute in the XML namespace",
-     lambda do
-       doc = Nokogiri::HTML5::Document.new
-       span = Nokogiri::XML::Element.new("span", doc)
-       svg = Nokogiri::XML::Element.new("svg", doc)
-       span.add_child(svg)
-       svg.add_namespace("xml", "http://www.w3.org/XML/1998/namespace")
-       svg["xml:foo"] = "test"
-       span
-     end,
-     '<svg xml:foo="test"></svg>',
-     '<span><svg xml:foo="test"></svg></span>'],
+    [
+      "Attribute in the XML namespace",
+      lambda do
+        doc = Nokogiri::HTML5::Document.new
+        span = Nokogiri::XML::Element.new("span", doc)
+        svg = Nokogiri::XML::Element.new("svg", doc)
+        span.add_child(svg)
+        svg.add_namespace("xml", "http://www.w3.org/XML/1998/namespace")
+        svg["xml:foo"] = "test"
+        span
+      end,
+      '<svg xml:foo="test"></svg>',
+      '<span><svg xml:foo="test"></svg></span>',
+    ],
 
-    ["Attribute in the XML namespace with the prefix not set to xml:",
-     lambda do
-       doc = Nokogiri::HTML5::Document.new
-       span = Nokogiri::XML::Element.new("span", doc)
-       svg = Nokogiri::XML::Element.new("svg", doc)
-       span.add_child(svg)
-       svg["abc:foo"] = "test"
-       ns = svg.add_namespace("xml", "http://www.w3.org/XML/1998/namespace")
-       svg.attribute("abc:foo").namespace = ns
-       span
-     end,
-     '<svg xml:foo="test"></svg>',
-     '<span><svg xml:foo="test"></svg></span>'],
+    [
+      "Attribute in the XML namespace with the prefix not set to xml:",
+      lambda do
+        doc = Nokogiri::HTML5::Document.new
+        span = Nokogiri::XML::Element.new("span", doc)
+        svg = Nokogiri::XML::Element.new("svg", doc)
+        span.add_child(svg)
+        svg["abc:foo"] = "test"
+        ns = svg.add_namespace("xml", "http://www.w3.org/XML/1998/namespace")
+        svg.attribute("abc:foo").namespace = ns
+        span
+      end,
+      '<svg xml:foo="test"></svg>',
+      '<span><svg xml:foo="test"></svg></span>',
+    ],
 
-    ["Non-'xmlns' attribute in the xmlns namespace",
-     lambda do
-       doc = Nokogiri::HTML5::Document.new
-       span = Nokogiri::XML::Element.new("span", doc)
-       svg = Nokogiri::XML::Element.new("svg", doc)
-       span.add_child(svg)
-       svg.add_namespace("xmlns", "http://www.w3.org/2000/xmlns/")
-       svg["xmlns:foo"] = "test"
-       span
-     end,
-     '<svg xmlns:foo="test"></svg>',
-     '<span><svg xmlns:foo="test"></svg></span>'],
+    [
+      "Non-'xmlns' attribute in the xmlns namespace",
+      lambda do
+        doc = Nokogiri::HTML5::Document.new
+        span = Nokogiri::XML::Element.new("span", doc)
+        svg = Nokogiri::XML::Element.new("svg", doc)
+        span.add_child(svg)
+        svg.add_namespace("xmlns", "http://www.w3.org/2000/xmlns/")
+        svg["xmlns:foo"] = "test"
+        span
+      end,
+      '<svg xmlns:foo="test"></svg>',
+      '<span><svg xmlns:foo="test"></svg></span>',
+    ],
 
-    ["'xmlns' attribute in the xmlns namespace",
-     lambda do
-       doc = Nokogiri::HTML5::Document.new
-       span = Nokogiri::XML::Element.new("span", doc)
-       svg = Nokogiri::XML::Element.new("svg", doc)
-       span.add_child(svg)
-       svg.add_namespace("xmlns", "http://www.w3.org/2000/xmlns/")
-       svg["xmlns"] = "test"
-       span
-     end,
-     '<svg xmlns="test"></svg>',
-     '<span><svg xmlns="test"></svg></span>'],
+    [
+      "'xmlns' attribute in the xmlns namespace",
+      lambda do
+        doc = Nokogiri::HTML5::Document.new
+        span = Nokogiri::XML::Element.new("span", doc)
+        svg = Nokogiri::XML::Element.new("svg", doc)
+        span.add_child(svg)
+        svg.add_namespace("xmlns", "http://www.w3.org/2000/xmlns/")
+        svg["xmlns"] = "test"
+        span
+      end,
+      '<svg xmlns="test"></svg>',
+      '<span><svg xmlns="test"></svg></span>',
+    ],
 
-    ["Attribute in non-standard namespace",
-     lambda do
-       doc = Nokogiri::HTML5::Document.new
-       span = Nokogiri::XML::Element.new("span", doc)
-       svg = Nokogiri::XML::Element.new("svg", doc)
-       span.add_child(svg)
-       svg.add_namespace("abc", "fake_ns")
-       svg["abc:def"] = "test"
-       span
-     end,
-     '<svg abc:def="test"></svg>',
-     '<span><svg abc:def="test"></svg></span>'],
+    [
+      "Attribute in non-standard namespace",
+      lambda do
+        doc = Nokogiri::HTML5::Document.new
+        span = Nokogiri::XML::Element.new("span", doc)
+        svg = Nokogiri::XML::Element.new("svg", doc)
+        span.add_child(svg)
+        svg.add_namespace("abc", "fake_ns")
+        svg["abc:def"] = "test"
+        span
+      end,
+      '<svg abc:def="test"></svg>',
+      '<span><svg abc:def="test"></svg></span>',
+    ],
 
-    ["<span> starting with U+000A",
-     lambda do
-       doc = Nokogiri::HTML5::Document.new
-       span = Nokogiri::XML::Element.new("span", doc)
-       text = Nokogiri::XML::Text.new("\x0A", doc)
-       span.add_child(text)
-       span
-     end,
-     "\x0A",
-     "<span>\x0A</span>"],
+    [
+      "<span> starting with U+000A",
+      lambda do
+        doc = Nokogiri::HTML5::Document.new
+        span = Nokogiri::XML::Element.new("span", doc)
+        text = Nokogiri::XML::Text.new("\x0A", doc)
+        span.add_child(text)
+        span
+      end,
+      "\x0A",
+      "<span>\x0A</span>",
+    ],
     # TODO: Processing instructions
   ]
 
-  TEXT_ELEMENTS = %w[pre textarea listing]
+  TEXT_ELEMENTS = ["pre", "textarea", "listing"]
   TEXT_TESTS = [
-    ["<%text> context starting with U+000A",
-     lambda do |tag|
-       doc = Nokogiri::HTML5::Document.new
-       elem = Nokogiri::XML::Element.new(tag, doc)
-       text = Nokogiri::XML::Text.new("\x0A", doc)
-       elem.add_child(text)
-       elem
-     end,
-     "\x0A",
-     "<%text>\x0A</%text>"],
+    [
+      "<%text> context starting with U+000A",
+      lambda do |tag|
+        doc = Nokogiri::HTML5::Document.new
+        elem = Nokogiri::XML::Element.new(tag, doc)
+        text = Nokogiri::XML::Text.new("\x0A", doc)
+        elem.add_child(text)
+        elem
+      end,
+      "\x0A",
+      "<%text>\x0A</%text>",
+    ],
 
-    ["<%text> context not starting with U+000A",
-     lambda do |tag|
-       doc = Nokogiri::HTML5::Document.new
-       elem = Nokogiri::XML::Element.new(tag, doc)
-       text = Nokogiri::XML::Text.new("a\x0A", doc)
-       elem.add_child(text)
-       elem
-     end,
-     "a\x0A",
-     "<%text>a\x0A</%text>"],
+    [
+      "<%text> context not starting with U+000A",
+      lambda do |tag|
+        doc = Nokogiri::HTML5::Document.new
+        elem = Nokogiri::XML::Element.new(tag, doc)
+        text = Nokogiri::XML::Text.new("a\x0A", doc)
+        elem.add_child(text)
+        elem
+      end,
+      "a\x0A",
+      "<%text>a\x0A</%text>",
+    ],
 
-    ["<%text> non-context starting with U+000A",
-     lambda do |tag|
-       doc = Nokogiri::HTML5::Document.new
-       elem = Nokogiri::XML::Element.new(tag, doc)
-       span = Nokogiri::XML::Element.new("span", doc)
-       text = Nokogiri::XML::Text.new("\x0A", doc)
-       elem.add_child(text)
-       span.add_child(elem)
-       span
-     end,
-     "<%text>\x0A</%text>",
-     "<span><%text>\x0A</%text></span>"],
+    [
+      "<%text> non-context starting with U+000A",
+      lambda do |tag|
+        doc = Nokogiri::HTML5::Document.new
+        elem = Nokogiri::XML::Element.new(tag, doc)
+        span = Nokogiri::XML::Element.new("span", doc)
+        text = Nokogiri::XML::Text.new("\x0A", doc)
+        elem.add_child(text)
+        span.add_child(elem)
+        span
+      end,
+      "<%text>\x0A</%text>",
+      "<span><%text>\x0A</%text></span>",
+    ],
 
-    ["<%text> non-context not starting with U+000A",
-     lambda do |tag|
-       doc = Nokogiri::HTML5::Document.new
-       elem = Nokogiri::XML::Element.new(tag, doc)
-       span = Nokogiri::XML::Element.new("span", doc)
-       text = Nokogiri::XML::Text.new("a\x0A", doc)
-       elem.add_child(text)
-       span.add_child(elem)
-       span
-     end,
-     "<%text>a\x0A</%text>",
-     "<span><%text>a\x0A</%text></span>"],
+    [
+      "<%text> non-context not starting with U+000A",
+      lambda do |tag|
+        doc = Nokogiri::HTML5::Document.new
+        elem = Nokogiri::XML::Element.new(tag, doc)
+        span = Nokogiri::XML::Element.new("span", doc)
+        text = Nokogiri::XML::Text.new("a\x0A", doc)
+        elem.add_child(text)
+        span.add_child(elem)
+        span
+      end,
+      "<%text>a\x0A</%text>",
+      "<span><%text>a\x0A</%text></span>",
+    ],
   ]
 
   VOID_ELEMENTS = [
-    "area", "base", "basefont", "bgsound", "br", "col", "embed",
-    "frame", "hr", "img", "input", "keygen", "link",
-    "meta", "param", "source", "track", "wbr"
+    "area",
+    "base",
+    "basefont",
+    "bgsound",
+    "br",
+    "col",
+    "embed",
+    "frame",
+    "hr",
+    "img",
+    "input",
+    "keygen",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
   ]
   VOID_TESTS = [
-    ["Void context node",
-     lambda do |tag|
-       doc = Nokogiri::HTML5::Document.new
-       Nokogiri::XML::Element.new(tag, doc)
-     end,
-     "",
-     "<%void>"],
+    [
+      "Void context node",
+      lambda do |tag|
+        doc = Nokogiri::HTML5::Document.new
+        Nokogiri::XML::Element.new(tag, doc)
+      end,
+      "",
+      "<%void>",
+    ],
 
-    ["void as first child with following siblings",
-     lambda do |tag|
-       doc = Nokogiri::HTML5::Document.new
-       span = Nokogiri::XML::Element.new("span", doc)
-       span.add_child(Nokogiri::XML::Element.new(tag, doc))
-       span.add_child(Nokogiri::XML::Element.new("a", doc))
-         .add_child(Nokogiri::XML::Text.new("test", doc))
-       span.add_child(Nokogiri::XML::Element.new("b", doc))
-       span
-     end,
-     "<%void><a>test</a><b></b>",
-     "<span><%void><a>test</a><b></b></span>"],
+    [
+      "void as first child with following siblings",
+      lambda do |tag|
+        doc = Nokogiri::HTML5::Document.new
+        span = Nokogiri::XML::Element.new("span", doc)
+        span.add_child(Nokogiri::XML::Element.new(tag, doc))
+        span.add_child(Nokogiri::XML::Element.new("a", doc))
+          .add_child(Nokogiri::XML::Text.new("test", doc))
+        span.add_child(Nokogiri::XML::Element.new("b", doc))
+        span
+      end,
+      "<%void><a>test</a><b></b>",
+      "<span><%void><a>test</a><b></b></span>",
+    ],
 
-    ["void as second child with following siblings",
-     lambda do |tag|
-       doc = Nokogiri::HTML5::Document.new
-       span = Nokogiri::XML::Element.new("span", doc)
-       span.add_child(Nokogiri::XML::Element.new("a", doc))
-         .add_child(Nokogiri::XML::Text.new("test", doc))
-       span.add_child(Nokogiri::XML::Element.new(tag, doc))
-       span.add_child(Nokogiri::XML::Element.new("b", doc))
-       span
-     end,
-     "<a>test</a><%void><b></b>",
-     "<span><a>test</a><%void><b></b></span>"],
-    ["void as last child with preceding siblings",
-     lambda do |tag|
-       doc = Nokogiri::HTML5::Document.new
-       span = Nokogiri::XML::Element.new("span", doc)
-       span.add_child(Nokogiri::XML::Element.new("a", doc))
-         .add_child(Nokogiri::XML::Text.new("test", doc))
-       span.add_child(Nokogiri::XML::Element.new("b", doc))
-       span.add_child(Nokogiri::XML::Element.new(tag, doc))
-       span
-     end,
-     "<a>test</a><b></b><%void>",
-     "<span><a>test</a><b></b><%void></span>"],
+    [
+      "void as second child with following siblings",
+      lambda do |tag|
+        doc = Nokogiri::HTML5::Document.new
+        span = Nokogiri::XML::Element.new("span", doc)
+        span.add_child(Nokogiri::XML::Element.new("a", doc))
+          .add_child(Nokogiri::XML::Text.new("test", doc))
+        span.add_child(Nokogiri::XML::Element.new(tag, doc))
+        span.add_child(Nokogiri::XML::Element.new("b", doc))
+        span
+      end,
+      "<a>test</a><%void><b></b>",
+      "<span><a>test</a><%void><b></b></span>",
+    ],
+    [
+      "void as last child with preceding siblings",
+      lambda do |tag|
+        doc = Nokogiri::HTML5::Document.new
+        span = Nokogiri::XML::Element.new("span", doc)
+        span.add_child(Nokogiri::XML::Element.new("a", doc))
+          .add_child(Nokogiri::XML::Text.new("test", doc))
+        span.add_child(Nokogiri::XML::Element.new("b", doc))
+        span.add_child(Nokogiri::XML::Element.new(tag, doc))
+        span
+      end,
+      "<a>test</a><b></b><%void>",
+      "<span><a>test</a><b></b><%void></span>",
+    ],
   ]
 
   # Generate tests
@@ -501,6 +545,28 @@ class TestHtml5Serialize < Nokogiri::TestCase
 
     define_method("test_serialization_void_outerHTML_#{test_data[0]}_#{tag}".to_sym) do
       assert_equal test_data[3].gsub("%void", tag), test_data[1].call(tag).serialize
+    end
+  end
+
+  def test_serializing_html5_fragment
+    fragment = Nokogiri::HTML5.fragment("<div>hello</div>goodbye")
+    refute(fragment.send(:prepend_newline?))
+    assert_equal("<div>hello</div>goodbye", fragment.to_html)
+  end
+
+  describe "foreign content style tag serialization is escaped" do
+    it "with svg parent" do
+      input = %{<svg><style>&lt;img src>}
+      expected = %{<svg><style>&lt;img src&gt;</style></svg>}
+
+      assert_equal(expected, Nokogiri::HTML5.fragment(input).to_html)
+    end
+
+    it "with math parent" do
+      input = %{<math><style>&lt;img src>}
+      expected = %{<math><style>&lt;img src&gt;</style></math>}
+
+      assert_equal(expected, Nokogiri::HTML5.fragment(input).to_html)
     end
   end
 end if Nokogiri.uses_gumbo?

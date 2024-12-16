@@ -19,10 +19,11 @@ import org.w3c.dom.Node;
  * @author sergio
  * @author Yoko Harada <yokolet@gmail.com>
  */
-
 @JRubyClass(name = "Nokogiri::XML::CDATA", parent = "Nokogiri::XML::Text")
 public class XmlCdata extends XmlText
 {
+  private static final long serialVersionUID = 1L;
+
   public
   XmlCdata(Ruby ruby, RubyClass rubyClass)
   {
@@ -42,9 +43,21 @@ public class XmlCdata extends XmlText
     if (args.length < 2) {
       throw getRuntime().newArgumentError(args.length, 2);
     }
-    IRubyObject doc = args[0];
+    IRubyObject rbDocument = args[0];
     content = args[1];
-    Document document = ((XmlNode) doc).getOwnerDocument();
+
+    if (content.isNil()) {
+      throw context.runtime.newTypeError("expected second parameter to be a String, received NilClass");
+    }
+    if (!(rbDocument instanceof XmlNode)) {
+      String msg = "expected first parameter to be a Nokogiri::XML::Document, received " + rbDocument.getMetaClass();
+      throw context.runtime.newTypeError(msg);
+    }
+    if (!(rbDocument instanceof XmlDocument)) {
+      context.runtime.getWarnings().warn("Passing a Node as the first parameter to CDATA.new is deprecated. Please pass a Document instead. This will become an error in Nokogiri v1.17.0."); // TODO: deprecated in v1.15.3, remove in v1.17.0
+    }
+
+    Document document = ((XmlNode) rbDocument).getOwnerDocument();
     Node node = document.createCDATASection(rubyStringToString(content));
     setNode(context.runtime, node);
   }

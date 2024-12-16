@@ -21,7 +21,7 @@
 #include <string.h>
 #include "ascii.h"
 #include "error.h"
-#include "gumbo.h"
+#include "nokogiri_gumbo.h"
 #include "macros.h"
 #include "parser.h"
 #include "string_buffer.h"
@@ -46,33 +46,40 @@ static int PRINTF(2) print_message (
     args
   );
   va_end(args);
-#if _MSC_VER && _MSC_VER < 1900
+
+#if (defined(_MSC_VER) && (_MSC_VER < 1900)) || defined(_RUBY_MSVCRT)
   if (bytes_written == -1) {
     // vsnprintf returns -1 on older MSVC++ if there's not enough capacity,
     // instead of returning the number of bytes that would've been written had
-    // there been enough. In this case, we'll double the buffer size and hope
-    // it fits when we retry (letting it fail and returning 0 if it doesn't),
-    // since there's no way to smartly resize the buffer.
-    gumbo_string_buffer_reserve(output->capacity * 2, output);
+    // there been enough. In this case, we can call vsnprintf() again but
+    // with a count of 0 to get the number of bytes written, not including
+    // the null terminator.
+    // https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/vsnprintf-vsnprintf-vsnprintf-l-vsnwprintf-vsnwprintf-l?view=msvc-140#behavior-summary
+
     va_start(args, format);
-    int result = vsnprintf (
-      output->data + output->length,
-      remaining_capacity,
+    bytes_written = vsnprintf (
+      NULL,
+      0,
       format,
       args
     );
     va_end(args);
-    return result == -1 ? 0 : result;
   }
-#else
+#endif
+
   // -1 in standard C99 indicates an encoding error. Return 0 and do nothing.
   if (bytes_written == -1) {
     return 0;
   }
-#endif
 
   if (bytes_written >= remaining_capacity) {
-    gumbo_string_buffer_reserve(output->capacity + bytes_written, output);
+    // At least double the size of the buffer.
+    size_t new_capacity = output->capacity * 2;
+    if (new_capacity < output->length + bytes_written + 1) {
+      // The +1 is for the null terminator.
+      new_capacity = output->length + bytes_written + 1;
+    }
+    gumbo_string_buffer_reserve(new_capacity, output);
     remaining_capacity = output->capacity - output->length;
     va_start(args, format);
     bytes_written = vsnprintf (
@@ -91,13 +98,19 @@ static void print_tag_stack (
   const GumboParserError* error,
   GumboStringBuffer* output
 ) {
-  print_message(output, "  Currently open tags: ");
+  print_message(output, " Currently open tags: ");
   for (unsigned int i = 0; i < error->tag_stack.length; ++i) {
     if (i) {
       print_message(output, ", ");
     }
-    GumboTag tag = (GumboTag) error->tag_stack.data[i];
-    print_message(output, "%s", gumbo_normalized_tagname(tag));
+    uintptr_t tag = (uintptr_t) error->tag_stack.data[i];
+    const char* tag_name;
+    if (tag > GUMBO_TAG_UNKNOWN) {
+      tag_name = error->tag_stack.data[i];
+    } else {
+      tag_name = gumbo_normalized_tagname((GumboTag)tag);
+    }
+    print_message(output, "%s", tag_name);
   }
   gumbo_string_buffer_append_codepoint('.', output);
 }
@@ -326,37 +339,45 @@ static void handle_parser_error (
   }
 
   switch (error->input_type) {
-    case GUMBO_TOKEN_DOCTYPE:
-      print_message(output, "This is not a legal doctype");
-      return;
-    case GUMBO_TOKEN_COMMENT:
-      // Should never happen; comments are always legal.
-      assert(0);
-      // But just in case...
-      print_message(output, "Comments aren't legal here");
-      return;
-    case GUMBO_TOKEN_CDATA:
-    case GUMBO_TOKEN_WHITESPACE:
-    case GUMBO_TOKEN_CHARACTER:
-      print_message(output, "Character tokens aren't legal here");
-      return;
-    case GUMBO_TOKEN_NULL:
-      print_message(output, "Null bytes are not allowed in HTML5");
-      return;
-    case GUMBO_TOKEN_EOF:
-      if (error->parser_state == GUMBO_INSERTION_MODE_INITIAL) {
-        print_message(output, "You must provide a doctype");
-      } else {
-        print_message(output, "Premature end of file");
-        print_tag_stack(error, output);
-      }
-      return;
-    case GUMBO_TOKEN_START_TAG:
-    case GUMBO_TOKEN_END_TAG:
-      print_message(output, "That tag isn't allowed here");
+  case GUMBO_TOKEN_DOCTYPE:
+    print_message(output, "This is not a legal doctype");
+    return;
+  case GUMBO_TOKEN_COMMENT:
+    // Should never happen; comments are always legal.
+    assert(0);
+    // But just in case...
+    print_message(output, "Comments aren't legal here");
+    return;
+  case GUMBO_TOKEN_CDATA:
+  case GUMBO_TOKEN_WHITESPACE:
+  case GUMBO_TOKEN_CHARACTER:
+    print_message(output, "Character tokens aren't legal here");
+    return;
+  case GUMBO_TOKEN_NULL:
+    print_message(output, "Null bytes are not allowed in HTML5");
+    return;
+  case GUMBO_TOKEN_EOF:
+    if (error->parser_state == GUMBO_INSERTION_MODE_INITIAL) {
+      print_message(output, "You must provide a doctype");
+    } else {
+      print_message(output, "Premature end of file.");
       print_tag_stack(error, output);
-      // TODO(jdtang): Give more specific messaging.
-      return;
+    }
+    return;
+  case GUMBO_TOKEN_START_TAG:
+  case GUMBO_TOKEN_END_TAG:
+  {
+    const char* tag_name;
+    const char* which = error->input_type == GUMBO_TOKEN_START_TAG ? "Start" : "End";
+    if (error->input_name) {
+      tag_name = error->input_name;
+    } else {
+      tag_name = gumbo_normalized_tagname(error->input_tag);
+    }
+    print_message(output, "%s tag '%s' isn't allowed here.", which, tag_name);
+    print_tag_stack(error, output);
+    return;
+  }
   }
 }
 
@@ -609,6 +630,17 @@ void gumbo_print_caret_diagnostic (
 
 void gumbo_error_destroy(GumboError* error) {
   if (error->type == GUMBO_ERR_PARSER) {
+    // Free the tag name.
+    if (error->v.parser.input_name) {
+      gumbo_free(error->v.parser.input_name);
+    }
+
+    for (unsigned int i = 0; i < error->v.parser.tag_stack.length; ++i) {
+      intptr_t tag = (intptr_t) error->v.parser.tag_stack.data[i];
+      if (tag > GUMBO_TAG_UNKNOWN) {
+        gumbo_free(error->v.parser.tag_stack.data[i]);
+      }
+    }
     gumbo_vector_destroy(&error->v.parser.tag_stack);
   }
   gumbo_free(error);

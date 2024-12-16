@@ -28,6 +28,8 @@ import org.xml.sax.InputSource;
  */
 public abstract class ParserContext extends RubyObject
 {
+  private static final long serialVersionUID = 1L;
+
   protected InputSource source = null;
   protected IRubyObject detected_encoding = null;
   protected int stringDataSize = -1;
@@ -58,6 +60,12 @@ public abstract class ParserContext extends RubyObject
     source = new InputSource();
     ParserContext.setUrl(context, source, url);
 
+    Ruby ruby = context.getRuntime();
+
+    if (!(data.respondsTo("read"))) {
+      throw ruby.newTypeError("argument expected to respond to :read");
+    }
+
     source.setByteStream(new IOInputStream(data));
     if (java_encoding != null) {
       source.setEncoding(java_encoding);
@@ -72,8 +80,11 @@ public abstract class ParserContext extends RubyObject
 
     Ruby ruby = context.getRuntime();
 
+    if (data.isNil()) {
+      throw ruby.newTypeError("wrong argument type nil (expected String)");
+    }
     if (!(data instanceof RubyString)) {
-      throw ruby.newArgumentError("must be kind_of String");
+      throw ruby.newTypeError("wrong argument type " + data.getMetaClass() + " (expected String)");
     }
 
     RubyString stringData = (RubyString) data;
@@ -92,6 +103,33 @@ public abstract class ParserContext extends RubyObject
     ByteArrayInputStream stream = new ByteArrayInputStream(bytes.unsafeBytes(), bytes.begin(), bytes.length());
     source.setByteStream(stream);
     source.setEncoding(java_encoding);
+  }
+
+  public void
+  setStringInputSourceNoEnc(ThreadContext context, IRubyObject data, IRubyObject url)
+  {
+    source = new InputSource();
+    ParserContext.setUrl(context, source, url);
+
+    Ruby ruby = context.getRuntime();
+
+    if (data.isNil()) {
+      throw ruby.newTypeError("wrong argument type nil (expected String)");
+    }
+    if (!(data instanceof RubyString)) {
+      throw ruby.newTypeError("wrong argument type " + data.getMetaClass() + " (expected String)");
+    }
+
+    RubyString stringData = (RubyString) data;
+
+    ByteList bytes = stringData.getByteList();
+
+    stringDataSize = bytes.length() - bytes.begin();
+    if (stringDataSize == 0) {
+      throw context.runtime.newRuntimeError("input string cannot be empty");
+    }
+    ByteArrayInputStream stream = new ByteArrayInputStream(bytes.unsafeBytes(), bytes.begin(), bytes.length());
+    source.setByteStream(stream);
   }
 
   public static void
@@ -171,23 +209,23 @@ public abstract class ParserContext extends RubyObject
     protected static final long NOCDATA = 16384;
     protected static final long NOXINCNODE = 32768;
 
-    public final boolean strict;
-    public final boolean recover;
-    public final boolean noEnt;
-    public final boolean dtdLoad;
-    public final boolean dtdAttr;
-    public final boolean dtdValid;
-    public final boolean noError;
-    public final boolean noWarning;
-    public final boolean pedantic;
-    public final boolean noBlanks;
-    public final boolean sax1;
-    public final boolean xInclude;
-    public final boolean noNet;
-    public final boolean noDict;
-    public final boolean nsClean;
-    public final boolean noCdata;
-    public final boolean noXIncNode;
+    public boolean strict;
+    public boolean recover;
+    public boolean noEnt;
+    public boolean dtdLoad;
+    public boolean dtdAttr;
+    public boolean dtdValid;
+    public boolean noError;
+    public boolean noWarning;
+    public boolean pedantic;
+    public boolean noBlanks;
+    public boolean sax1;
+    public boolean xInclude;
+    public boolean noNet;
+    public boolean noDict;
+    public boolean nsClean;
+    public boolean noCdata;
+    public boolean noXIncNode;
 
     protected static boolean
     test(long options, long mask)
@@ -219,9 +257,9 @@ public abstract class ParserContext extends RubyObject
   }
 
   /*
-  public static class NokogiriXInlcudeEntityResolver implements org.xml.sax.EntityResolver {
+  public static class NokogiriXIncludeEntityResolver implements org.xml.sax.EntityResolver {
       InputSource source;
-      public NokogiriXInlcudeEntityResolver(InputSource source) {
+      public NokogiriXIncludeEntityResolver(InputSource source) {
           this.source = source;
       }
 

@@ -25,18 +25,12 @@ pushd $GEMS_DIR
 
 popd
 
-if [ -n "${BUNDLE_APP_CONFIG:-}" ] ; then
-  export BUNDLE_CACHE_PATH="${BUNDLE_APP_CONFIG}/cache"
-fi
-
+# 2.3.21 because https://github.com/rubygems/rubygems/issues/5914
+# 2.3.22 because https://github.com/rubygems/rubygems/issues/5940
+gem install bundler -v "~> 2.2, != 2.3.21, != 2.3.22"
 bundle install --local || bundle install
 
 rm -rf lib ext # ensure we don't use the local files
 rake test
 
 ./scripts/test-gem-installation
-
-# delete the Gemfile because that's confusing to older versions of rubygems (e.g., bionic32)
-rm -f Gemfile Gemfile.lock
-./scripts/test-nokogumbo-compatibility 2.0.4
-./scripts/test-nokogumbo-compatibility 2.0.5

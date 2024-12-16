@@ -25,6 +25,8 @@ import org.w3c.dom.Node;
 @JRubyClass(name = "Nokogiri::XML::Namespace")
 public class XmlNamespace extends RubyObject
 {
+  private static final long serialVersionUID = 1L;
+
   private Attr attr;
   private transient IRubyObject prefixRuby;
   private transient IRubyObject hrefRuby;
@@ -78,14 +80,6 @@ public class XmlNamespace extends RubyObject
   getHref()
   {
     return href;
-  }
-
-  void
-  deleteHref()
-  {
-    href = "http://www.w3.org/XML/1998/namespace";
-    hrefRuby = null;
-    attr.getOwnerElement().removeAttributeNode(attr);
   }
 
   public static XmlNamespace

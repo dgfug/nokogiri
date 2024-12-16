@@ -1,61 +1,71 @@
 # coding: utf-8
 # frozen_string_literal: true
+
+# This file includes code from the Nokogumbo project, whose license follows.
 #
-#  Copyright 2013-2021 Sam Ruby, Stephen Checkoway
+#   Copyright 2013-2021 Sam Ruby, Stephen Checkoway
 #
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
 #
-#      http://www.apache.org/licenses/LICENSE-2.0
+#       http://www.apache.org/licenses/LICENSE-2.0
 #
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
 #
 
-require_relative 'html5/document'
-require_relative 'html5/document_fragment'
-require_relative 'html5/node'
+require_relative "html5/document"
+require_relative "html5/document_fragment"
+require_relative "html5/node"
+require_relative "html5/builder"
 
 module Nokogiri
-  # @since v1.12.0
-  # @note HTML5 functionality is not available when running JRuby.
-  # Parse an HTML5 document. Convenience method for {Nokogiri::HTML5::Document.parse}
-  def self.HTML5(input, url = nil, encoding = nil, **options, &block)
-    Nokogiri::HTML5::Document.parse(input, url, encoding, **options, &block)
+  # Convenience method for Nokogiri::HTML5::Document.parse
+  def self.HTML5(...)
+    Nokogiri::HTML5::Document.parse(...)
   end
 
   # == Usage
   #
   # Parse an HTML5 document:
   #
-  #   doc = Nokogiri.HTML5(string)
+  #   doc = Nokogiri.HTML5(input)
   #
   # Parse an HTML5 fragment:
   #
-  #   fragment = Nokogiri::HTML5.fragment(string)
+  #   fragment = Nokogiri::HTML5.fragment(input)
+  #
+  # ⚠ HTML5 functionality is not available when running JRuby.
   #
   # == Parsing options
   #
-  # The document and fragment parsing methods support options that are different from Nokogiri's.
+  # The document and fragment parsing methods support options that are different from
+  # Nokogiri::HTML4::Document or Nokogiri::XML::Document.
   #
-  # - <tt>Nokogiri.HTML5(html, url = nil, encoding = nil, options = {})</tt>
-  # - <tt>Nokogiri::HTML5.parse(html, url = nil, encoding = nil, options = {})</tt>
-  # - <tt>Nokogiri::HTML5::Document.parse(html, url = nil, encoding = nil, options = {})</tt>
-  # - <tt>Nokogiri::HTML5.fragment(html, encoding = nil, options = {})</tt>
-  # - <tt>Nokogiri::HTML5::DocumentFragment.parse(html, encoding = nil, options = {})</tt>
+  # - <tt>Nokogiri.HTML5(input, url:, encoding:, **parse_options)</tt>
+  # - <tt>Nokogiri::HTML5.parse(input, url:, encoding:, **parse_options)</tt>
+  # - <tt>Nokogiri::HTML5::Document.parse(input, url:, encoding:, **parse_options)</tt>
+  # - <tt>Nokogiri::HTML5.fragment(input, encoding:, **parse_options)</tt>
+  # - <tt>Nokogiri::HTML5::DocumentFragment.parse(input, encoding:, **parse_options)</tt>
   #
-  # The three currently supported options are +:max_errors+, +:max_tree_depth+ and
-  # +:max_attributes+, described below.
+  # The four currently supported parse options are
   #
-  # === Error reporting
+  # - +max_errors:+ (Integer, default 0) Maximum number of parse errors to report in HTML5::Document#errors.
+  # - +max_tree_depth:+ (Integer, default +Nokogiri::Gumbo::DEFAULT_MAX_TREE_DEPTH+) Maximum tree depth to parse.
+  # - +max_attributes:+ (Integer, default +Nokogiri::Gumbo::DEFAULT_MAX_ATTRIBUTES+) Maximum number of attributes to parse per element.
+  # - +parse_noscript_content_as_text:+ (Boolean, default false) When enabled, parse +noscript+ tag content as text, mimicking the behavior of web browsers.
+  #
+  # These options are explained in the following sections.
+  #
+  # === Error reporting: +max_errors:+
   #
   # Nokogiri contains an experimental HTML5 parse error reporting facility. By default, no parse
   # errors are reported but this can be configured by passing the +:max_errors+ option to
-  # {HTML5.parse} or {HTML5.fragment}.
+  # HTML5.parse or HTML5.fragment.
   #
   # For example, this script:
   #
@@ -81,20 +91,21 @@ module Nokogiri
   #
   # Using <tt>max_errors: -1</tt> results in an unlimited number of errors being returned.
   #
-  # The errors returned by {HTML5::Document#errors} are instances of {Nokogiri::XML::SyntaxError}.
+  # The errors returned by HTML5::Document#errors are instances of Nokogiri::XML::SyntaxError.
   #
-  # The {https://html.spec.whatwg.org/multipage/parsing.html#parse-errors HTML standard} defines a
+  # The {HTML standard}[https://html.spec.whatwg.org/multipage/parsing.html#parse-errors] defines a
   # number of standard parse error codes. These error codes only cover the "tokenization" stage of
   # parsing HTML. The parse errors in the "tree construction" stage do not have standardized error
   # codes (yet).
   #
-  # As a convenience to Nokogiri users, the defined error codes are available via
-  # {Nokogiri::XML::SyntaxError#str1} method.
+  # As a convenience to Nokogiri users, the defined error codes are available
+  # via Nokogiri::XML::SyntaxError#str1 method.
   #
   #   doc = Nokogiri::HTML5.parse('<span/>Hi there!</span foo=bar />', max_errors: 10)
   #   doc.errors.each do |err|
   #     puts("#{err.line}:#{err.column}: #{err.str1}")
   #   end
+  #   doc = Nokogiri::HTML5.parse('<span/>Hi there!</span foo=bar />',
   #   # => 1:1: generic-parser
   #   #    1:1: non-void-html-element-start-tag-with-trailing-solidus
   #   #    1:17: end-tag-with-trailing-solidus
@@ -107,40 +118,75 @@ module Nokogiri
   # are not part of Nokogiri's public API. That is, these are subject to change without Nokogiri's
   # major version number changing. These may be stabilized in the future.
   #
-  # === Maximum tree depth
+  # === Maximum tree depth: +max_tree_depth:+
   #
   # The maximum depth of the DOM tree parsed by the various parsing methods is configurable by the
   # +:max_tree_depth+ option. If the depth of the tree would exceed this limit, then an
-  # {::ArgumentError} is thrown.
+  # +ArgumentError+ is thrown.
   #
-  # This limit (which defaults to <tt>Nokogiri::Gumbo::DEFAULT_MAX_TREE_DEPTH = 400</tt>) can be
-  # removed by giving the option <tt>max_tree_depth: -1</tt>.
+  # This limit (which defaults to +Nokogiri::Gumbo::DEFAULT_MAX_TREE_DEPTH+) can be removed by
+  # giving the option <tt>max_tree_depth: -1</tt>.
   #
   #   html = '<!DOCTYPE html>' + '<div>' * 1000
   #   doc = Nokogiri.HTML5(html)
   #   # raises ArgumentError: Document tree depth limit exceeded
   #   doc = Nokogiri.HTML5(html, max_tree_depth: -1)
   #
-  # === Attribute limit per element
+  # === Attribute limit per element: +max_attributes:+
   #
   # The maximum number of attributes per DOM element is configurable by the +:max_attributes+
-  # option. If a given element would exceed this limit, then an {::ArgumentError} is thrown.
+  # option. If a given element would exceed this limit, then an +ArgumentError+ is thrown.
   #
-  # This limit (which defaults to <tt>Nokogiri::Gumbo::DEFAULT_MAX_ATTRIBUTES = 400</tt>) can be
-  # removed by giving the option <tt>max_attributes: -1</tt>.
+  # This limit (which defaults to +Nokogiri::Gumbo::DEFAULT_MAX_ATTRIBUTES+) can be removed by
+  # giving the option <tt>max_attributes: -1</tt>.
   #
-  #   html = '<!DOCTYPE html><div ' + (1..1000).map { |x| "attr-#{x}" }.join(' ') + '>'
+  #   html = '<!DOCTYPE html><div ' + (1..1000).map { |x| "attr-#{x}" }.join(' # ') + '>'
   #   # "<!DOCTYPE html><div attr-1 attr-2 attr-3 ... attr-1000>"
   #   doc = Nokogiri.HTML5(html)
   #   # raises ArgumentError: Attributes per element limit exceeded
+  #
   #   doc = Nokogiri.HTML5(html, max_attributes: -1)
+  #   # parses successfully
+  #
+  # === Parse +noscript+ elements' content as text: +parse_noscript_content_as_text:+
+  #
+  # By default, the content of +noscript+ elements is parsed as HTML elements. Browsers that
+  # support scripting parse the content of +noscript+ elements as raw text.
+  #
+  # The +:parse_noscript_content_as_text+ option causes Nokogiri to parse the content of +noscript+
+  # elements as a single text node.
+  #
+  #   html = "<!DOCTYPE html><noscript><meta charset='UTF-8'><link rel=stylesheet href=!></noscript>"
+  #   doc = Nokogiri::HTML5.parse(html, parse_noscript_content_as_text: true)
+  #   pp doc.at_xpath("/html/head/noscript")
+  #   # => #(Element:0x878c {
+  #   #        name = "noscript",
+  #   #        children = [ #(Text "<meta charset='UTF-8'><link rel=stylesheet href=!>")]
+  #   #      })
+  #
+  # In contrast, <tt>parse_noscript_content_as_text: false</tt> (the default) causes the +noscript+
+  # element in the previous example to have two children, a +meta+ element and a +link+ element.
+  #
+  #   doc = Nokogiri::HTML5.parse(html)
+  #   puts doc.at_xpath("/html/head/noscript")
+  #   # => #(Element:0x96b4 {
+  #   #      name = "noscript",
+  #   #      children = [
+  #   #        #(Element:0x97e0 { name = "meta", attribute_nodes = [ #(Attr:0x990c { name = "charset", value = "UTF-8" })] }),
+  #   #        #(Element:0x9b00 {
+  #   #          name = "link",
+  #   #          attribute_nodes = [
+  #   #            #(Attr:0x9c2c { name = "rel", value = "stylesheet" }),
+  #   #            #(Attr:0x9dd0 { name = "href", value = "!" })]
+  #   #          })]
+  #   #      })
   #
   # == HTML Serialization
   #
-  # After parsing HTML, it may be serialized using any of the {Nokogiri::XML::Node} serialization
-  # methods. In particular, {XML::Node#serialize}, {XML::Node#to_html}, and {XML::Node#to_s} will
+  # After parsing HTML, it may be serialized using any of the Nokogiri::XML::Node serialization
+  # methods. In particular, XML::Node#serialize, XML::Node#to_html, and XML::Node#to_s will
   # serialize a given node and its children. (This is the equivalent of JavaScript's
-  # +Element.outerHTML+.) Similarly, {XML::Node#inner_html} will serialize the children of a given
+  # +Element.outerHTML+.) Similarly, XML::Node#inner_html will serialize the children of a given
   # node. (This is the equivalent of JavaScript's +Element.innerHTML+.)
   #
   #   doc = Nokogiri::HTML5("<!DOCTYPE html><span>Hello world!</span>")
@@ -148,12 +194,12 @@ module Nokogiri
   #   # => <!DOCTYPE html><html><head></head><body><span>Hello world!</span></body></html>
   #
   # Due to quirks in how HTML is parsed and serialized, it's possible for a DOM tree to be
-  # serialized and then re-parsed, resulting in a different DOM.  Mostly, this happens with DOMs
+  # serialized and then re-parsed, resulting in a different DOM. Mostly, this happens with DOMs
   # produced from invalid HTML. Unfortunately, even valid HTML may not survive serialization and
   # re-parsing.
   #
-  # In particular, a newline at the start of +pre+, +listing+, and +textarea+ elements is ignored by
-  # the parser.
+  # In particular, a newline at the start of +pre+, +listing+, and +textarea+
+  # elements is ignored by the parser.
   #
   #   doc = Nokogiri::HTML5(<<-EOF)
   #   <!DOCTYPE html>
@@ -182,292 +228,141 @@ module Nokogiri
   #
   # == Encodings
   #
-  # Nokogiri always parses HTML5 using {https://en.wikipedia.org/wiki/UTF-8 UTF-8}; however, the
+  # Nokogiri always parses HTML5 using {UTF-8}[https://en.wikipedia.org/wiki/UTF-8]; however, the
   # encoding of the input can be explicitly selected via the optional +encoding+ parameter. This is
   # most useful when the input comes not from a string but from an IO object.
   #
   # When serializing a document or node, the encoding of the output string can be specified via the
   # +:encoding+ options. Characters that cannot be encoded in the selected encoding will be encoded
-  # as {https://en.wikipedia.org/wiki/List_of_XML_and_HTML_character_entity_references HTML numeric
-  # entities}.
+  # as {HTML numeric
+  # entities}[https://en.wikipedia.org/wiki/List_of_XML_and_HTML_character_entity_references].
   #
   #   frag = Nokogiri::HTML5.fragment('<span>아는 길도 물어가라</span>')
   #   html = frag.serialize(encoding: 'US-ASCII')
   #   puts html
   #   # => <span>&#xc544;&#xb294; &#xae38;&#xb3c4; &#xbb3c;&#xc5b4;&#xac00;&#xb77c;</span>
+  #
   #   frag = Nokogiri::HTML5.fragment(html)
   #   puts frag.serialize
   #   # => <span>아는 길도 물어가라</span>
   #
-  # (There's a {https://bugs.ruby-lang.org/issues/15033 bug} in all current versions of Ruby that
+  # (There's a {bug}[https://bugs.ruby-lang.org/issues/15033] in all current versions of Ruby that
   # can cause the entity encoding to fail. Of the mandated supported encodings for HTML, the only
   # encoding I'm aware of that has this bug is <tt>'ISO-2022-JP'</tt>. We recommend avoiding this
   # encoding.)
   #
   # == Notes
   #
-  # * The {Nokogiri::HTML5.fragment} function takes a string and parses it
-  #   as a HTML5 document.  The +<html>+, +<head>+, and +<body>+ elements are
-  #   removed from this document, and any children of these elements that remain
-  #   are returned as a {Nokogiri::HTML5::DocumentFragment}.
+  # * The Nokogiri::HTML5.fragment function takes a String or IO and parses it as a HTML5 document
+  #   in a +body+ context. As a result, the +html+, +head+, and +body+ elements are removed from
+  #   this document, and any children of these elements that remain are returned as a
+  #   Nokogiri::HTML5::DocumentFragment; but you can pass in a different context (e.g., "html" to
+  #   get +head+ and +body+ tags in the result).
   #
-  # * The {Nokogiri::HTML5.parse} function takes a string and passes it to the
-  #   <code>gumbo_parse_with_options</code> method, using the default options.
-  #   The resulting Gumbo parse tree is then walked.
+  # * The Nokogiri::HTML5.parse function takes a String or IO and passes it to the
+  #   <code>gumbo_parse_with_options</code> method, using the default options.  The resulting Gumbo
+  #   parse tree is then walked.
   #
   # * Instead of uppercase element names, lowercase element names are produced.
   #
-  # * Instead of returning +unknown+ as the element name for unknown tags, the
-  #   original tag name is returned verbatim.
+  # * Instead of returning +unknown+ as the element name for unknown tags, the original tag name is
+  #   returned verbatim.
   #
-  # @since v1.12.0
-  # @note HTML5 functionality is not available when running JRuby.
+  # Since v1.12.0
   module HTML5
-    # HTML uses the XHTML namespace.
-    HTML_NAMESPACE = 'http://www.w3.org/1999/xhtml'.freeze
-    MATHML_NAMESPACE = 'http://www.w3.org/1998/Math/MathML'.freeze
-    SVG_NAMESPACE = 'http://www.w3.org/2000/svg'.freeze
-    XLINK_NAMESPACE = 'http://www.w3.org/1999/xlink'.freeze
-    XML_NAMESPACE = 'http://www.w3.org/XML/1998/namespace'.freeze
-    XMLNS_NAMESPACE = 'http://www.w3.org/2000/xmlns/'.freeze
-
-    # Parse an HTML 5 document. Convenience method for {Nokogiri::HTML5::Document.parse}
-    def self.parse(string, url = nil, encoding = nil, **options, &block)
-      Document.parse(string, url, encoding, **options, &block)
-    end
-
-    # Parse a fragment from +string+. Convenience method for
-    # {Nokogiri::HTML5::DocumentFragment.parse}.
-    def self.fragment(string, encoding = nil, **options)
-      DocumentFragment.parse(string, encoding, options)
-    end
-
-    # Fetch and parse a HTML document from the web, following redirects,
-    # handling https, and determining the character encoding using HTML5
-    # rules.  +uri+ may be a +String+ or a +URI+.  +options+ contains
-    # http headers and special options.  Everything which is not a
-    # special option is considered a header.  Special options include:
-    #  * :follow_limit => number of redirects which are followed
-    #  * :basic_auth => [username, password]
-    def self.get(uri, options={})
-      warn("Nokogiri::HTML5.get is deprecated and will be removed in a future version of Nokogiri.",
-           uplevel: 1, category: :deprecated)
-      get_impl(uri, options)
-    end
-
-    private
-
-    def self.get_impl(uri, options={})
-      headers = options.clone
-      headers = {:follow_limit => headers} if Numeric === headers # deprecated
-      limit=headers[:follow_limit] ? headers.delete(:follow_limit).to_i : 10
-
-      require 'net/http'
-      uri = URI(uri) unless URI === uri
-
-      http = Net::HTTP.new(uri.host, uri.port)
-
-      # TLS / SSL support
-      http.use_ssl = true if uri.scheme == 'https'
-
-      # Pass through Net::HTTP override values, which currently include:
-      #   :ca_file, :ca_path, :cert, :cert_store, :ciphers,
-      #   :close_on_empty_response, :continue_timeout, :key, :open_timeout,
-      #   :read_timeout, :ssl_timeout, :ssl_version, :use_ssl,
-      #   :verify_callback, :verify_depth, :verify_mode
-      options.each do |key, value|
-        http.send "#{key}=", headers.delete(key) if http.respond_to? "#{key}="
+    class << self
+      # Convenience method for Nokogiri::HTML5::Document.parse
+      def parse(...)
+        Document.parse(...)
       end
 
-      request = Net::HTTP::Get.new(uri.request_uri)
-
-      # basic authentication
-      auth = headers.delete(:basic_auth)
-      auth ||= [uri.user, uri.password] if uri.user && uri.password
-      request.basic_auth auth.first, auth.last if auth
-
-      # remaining options are treated as headers
-      headers.each {|key, value| request[key.to_s] = value.to_s}
-
-      response = http.request(request)
-
-      case response
-      when Net::HTTPSuccess
-        doc = parse(reencode(response.body, response['content-type']), options)
-        doc.instance_variable_set('@response', response)
-        doc.class.send(:attr_reader, :response)
-        doc
-      when Net::HTTPRedirection
-        response.value if limit <= 1
-        location = URI.join(uri, response['location'])
-        get_impl(location, options.merge(:follow_limit => limit-1))
-      else
-        response.value
+      # Convenience method for Nokogiri::HTML5::DocumentFragment.parse
+      def fragment(...)
+        DocumentFragment.parse(...)
       end
-    end
 
-    def self.read_and_encode(string, encoding)
-      # Read the string with the given encoding.
-      if string.respond_to?(:read)
-        if encoding.nil?
-          string = string.read
+      # :nodoc:
+      def read_and_encode(string, encoding)
+        # Read the string with the given encoding.
+        if string.respond_to?(:read)
+          string = if encoding.nil?
+            string.read
+          else
+            string.read(encoding: encoding)
+          end
         else
-          string = string.read(encoding: encoding)
-        end
-      else
-        # Otherwise the string has the given encoding.
-        string = string.to_s
-        if encoding
-          string = string.dup
-          string.force_encoding(encoding)
-        end
-      end
-
-      # convert to UTF-8
-      if string.encoding != Encoding::UTF_8
-        string = reencode(string)
-      end
-      string
-    end
-
-    # Charset sniffing is a complex and controversial topic that understandably isn't done _by
-    # default_ by the Ruby Net::HTTP library.  This being said, it is a very real problem for
-    # consumers of HTML as the default for HTML is iso-8859-1, most "good" producers use utf-8, and
-    # the Gumbo parser *only* supports utf-8.
-    #
-    # Accordingly, Nokogiri::HTML4::Document.parse provides limited encoding detection.  Following
-    # this lead, Nokogiri::HTML5 attempts to do likewise, while attempting to more closely follow
-    # the HTML5 standard.
-    #
-    # http://bugs.ruby-lang.org/issues/2567
-    # http://www.w3.org/TR/html5/syntax.html#determining-the-character-encoding
-    #
-    def self.reencode(body, content_type=nil)
-      if body.encoding == Encoding::ASCII_8BIT
-        encoding = nil
-
-        # look for a Byte Order Mark (BOM)
-        initial_bytes = body[0..2].bytes
-        if initial_bytes[0..2] == [0xEF, 0xBB, 0xBF]
-          encoding = Encoding::UTF_8
-        elsif initial_bytes[0..1] == [0xFE, 0xFF]
-          encoding = Encoding::UTF_16BE
-        elsif initial_bytes[0..1] == [0xFF, 0xFE]
-          encoding = Encoding::UTF_16LE
-        end
-
-        # look for a charset in a content-encoding header
-        if content_type
-          encoding ||= content_type[/charset=["']?(.*?)($|["';\s])/i, 1]
-        end
-
-        # look for a charset in a meta tag in the first 1024 bytes
-        if not encoding
-          data = body[0..1023].gsub(/<!--.*?(-->|\Z)/m, '')
-          data.scan(/<meta.*?>/m).each do |meta|
-            encoding ||= meta[/charset=["']?([^>]*?)($|["'\s>])/im, 1]
+          # Otherwise the string has the given encoding.
+          string = string.to_s
+          if encoding
+            string = string.dup
+            string.force_encoding(encoding)
           end
         end
 
-        # if all else fails, default to the official default encoding for HTML
-        encoding ||= Encoding::ISO_8859_1
-
-        # change the encoding to match the detected or inferred encoding
-        body = body.dup
-        begin
-          body.force_encoding(encoding)
-        rescue ArgumentError
-          body.force_encoding(Encoding::ISO_8859_1)
+        # convert to UTF-8
+        if string.encoding != Encoding::UTF_8
+          string = reencode(string)
         end
+        string
       end
 
-      body.encode(Encoding::UTF_8)
-    end
+      private
 
-    def self.serialize_node_internal(current_node, io, encoding, options)
-      case current_node.type
-      when XML::Node::ELEMENT_NODE
-        ns = current_node.namespace
-        ns_uri = ns.nil? ? nil : ns.href
-        # XXX(sfc): attach namespaces to all nodes, even html?
-        if ns_uri.nil? || ns_uri == HTML_NAMESPACE || ns_uri == MATHML_NAMESPACE || ns_uri == SVG_NAMESPACE
-          tagname = current_node.name
-        else
-          tagname = "#{ns.prefix}:#{current_node.name}"
-        end
-        io << '<' << tagname
-        current_node.attribute_nodes.each do |attr|
-          attr_ns = attr.namespace
-          if attr_ns.nil?
-            attr_name = attr.name
-          else
-            ns_uri = attr_ns.href
-            if ns_uri == XML_NAMESPACE
-              attr_name = 'xml:' + attr.name.sub(/^[^:]*:/, '')
-            elsif ns_uri == XMLNS_NAMESPACE && attr.name.sub(/^[^:]*:/, '') == 'xmlns'
-              attr_name = 'xmlns'
-            elsif ns_uri == XMLNS_NAMESPACE
-              attr_name = 'xmlns:' + attr.name.sub(/^[^:]*:/, '')
-            elsif ns_uri == XLINK_NAMESPACE
-              attr_name = 'xlink:' + attr.name.sub(/^[^:]*:/, '')
-            else
-              attr_name = "#{attr_ns.prefix}:#{attr.name}"
+      # Charset sniffing is a complex and controversial topic that understandably isn't done _by
+      # default_ by the Ruby Net::HTTP library. This being said, it is a very real problem for
+      # consumers of HTML as the default for HTML is iso-8859-1, most "good" producers use utf-8, and
+      # the Gumbo parser *only* supports utf-8.
+      #
+      # Accordingly, Nokogiri::HTML4::Document.parse provides limited encoding detection. Following
+      # this lead, Nokogiri::HTML5 attempts to do likewise, while attempting to more closely follow
+      # the HTML5 standard.
+      #
+      # http://bugs.ruby-lang.org/issues/2567
+      # http://www.w3.org/TR/html5/syntax.html#determining-the-character-encoding
+      #
+      def reencode(body, content_type = nil)
+        if body.encoding == Encoding::ASCII_8BIT
+          encoding = nil
+
+          # look for a Byte Order Mark (BOM)
+          initial_bytes = body[0..2].bytes
+          if initial_bytes[0..2] == [0xEF, 0xBB, 0xBF]
+            encoding = Encoding::UTF_8
+          elsif initial_bytes[0..1] == [0xFE, 0xFF]
+            encoding = Encoding::UTF_16BE
+          elsif initial_bytes[0..1] == [0xFF, 0xFE]
+            encoding = Encoding::UTF_16LE
+          end
+
+          # look for a charset in a content-encoding header
+          if content_type
+            encoding ||= content_type[/charset=["']?(.*?)($|["';\s])/i, 1]
+          end
+
+          # look for a charset in a meta tag in the first 1024 bytes
+          unless encoding
+            data = body[0..1023].gsub(/<!--.*?(-->|\Z)/m, "")
+            data.scan(/<meta.*?>/im).each do |meta|
+              encoding ||= meta[/charset=["']?([^>]*?)($|["'\s>])/im, 1]
             end
           end
-          io << ' ' << attr_name << '="' << escape_text(attr.content, encoding, true) << '"'
-        end
-        io << '>'
-        if !%w[area base basefont bgsound br col embed frame hr img input keygen
-               link meta param source track wbr].include?(current_node.name)
-          io << "\n" if options[:preserve_newline] && prepend_newline?(current_node)
-          current_node.children.each do |child|
-            # XXX(sfc): Templates handled specially?
-            serialize_node_internal(child, io, encoding, options)
+
+          # if all else fails, default to the official default encoding for HTML
+          encoding ||= Encoding::ISO_8859_1
+
+          # change the encoding to match the detected or inferred encoding
+          body = body.dup
+          begin
+            body.force_encoding(encoding)
+          rescue ArgumentError
+            body.force_encoding(Encoding::ISO_8859_1)
           end
-          io << '</' << tagname << '>'
         end
-      when XML::Node::TEXT_NODE
-        parent = current_node.parent
-        if parent.element? && %w[style script xmp iframe noembed noframes plaintext noscript].include?(parent.name)
-          io << current_node.content
-        else
-          io << escape_text(current_node.content, encoding, false)
-        end
-      when XML::Node::CDATA_SECTION_NODE
-        io << '<![CDATA[' << current_node.content << ']]>'
-      when XML::Node::COMMENT_NODE
-        io << '<!--' << current_node.content << '-->'
-      when XML::Node::PI_NODE
-        io << '<?' << current_node.content << '>'
-      when XML::Node::DOCUMENT_TYPE_NODE, XML::Node::DTD_NODE
-          io << '<!DOCTYPE ' << current_node.name << '>'
-      when XML::Node::HTML_DOCUMENT_NODE, XML::Node::DOCUMENT_FRAG_NODE
-        current_node.children.each do |child|
-          serialize_node_internal(child, io, encoding, options)
-        end
-      else
-        raise "Unexpected node '#{current_node.name}' of type #{current_node.type}"
-      end
-    end
 
-    def self.escape_text(text, encoding, attribute_mode)
-      if attribute_mode
-        text = text.gsub(/[&\u00a0"]/,
-                           '&' => '&amp;', "\u00a0" => '&nbsp;', '"' => '&quot;')
-      else
-        text = text.gsub(/[&\u00a0<>]/,
-                           '&' => '&amp;', "\u00a0" => '&nbsp;',  '<' => '&lt;', '>' => '&gt;')
+        body.encode(Encoding::UTF_8)
       end
-      # Not part of the standard
-      text.encode(encoding, fallback: lambda { |c| "&\#x#{c.ord.to_s(16)};" })
-    end
-
-    def self.prepend_newline?(node)
-      return false unless %w[pre textarea listing].include?(node.name) && !node.children.empty?
-      first_child = node.children[0]
-      first_child.text? && first_child.content.start_with?("\n")
     end
   end
 end
 
-require_relative 'gumbo'
+require_relative "gumbo"

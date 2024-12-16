@@ -20,7 +20,7 @@ new (int argc, VALUE *argv, VALUE klass)
 
   rb_scan_args(argc, argv, "2*", &document, &name, &rest);
 
-  Data_Get_Struct(document, xmlDoc, xml_doc);
+  xml_doc = noko_xml_document_unwrap(document);
 
   node = xmlNewReference(
            xml_doc,
@@ -38,7 +38,7 @@ new (int argc, VALUE *argv, VALUE klass)
 }
 
 void
-noko_init_xml_entity_reference()
+noko_init_xml_entity_reference(void)
 {
   assert(cNokogiriXmlNode);
   /*

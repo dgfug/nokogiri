@@ -15,8 +15,8 @@ import org.apache.xerces.xni.XMLAttributes;
 import org.apache.xerces.xni.XNIException;
 import org.apache.xerces.xni.parser.XMLDocumentFilter;
 import org.apache.xerces.xni.parser.XMLParserConfiguration;
-import org.cyberneko.html.HTMLConfiguration;
-import org.cyberneko.html.filters.DefaultFilter;
+import net.sourceforge.htmlunit.cyberneko.HTMLConfiguration;
+import net.sourceforge.htmlunit.cyberneko.filters.DefaultFilter;
 import org.jruby.Ruby;
 import org.jruby.RubyClass;
 import org.jruby.runtime.ThreadContext;
@@ -36,6 +36,7 @@ import org.w3c.dom.NodeList;
  */
 public class HtmlDomParserContext extends XmlDomParserContext
 {
+  private static final long serialVersionUID = 1L;
 
   public
   HtmlDomParserContext(Ruby runtime, IRubyObject options)
@@ -55,9 +56,7 @@ public class HtmlDomParserContext extends XmlDomParserContext
   initParser(Ruby runtime)
   {
     XMLParserConfiguration config = new HTMLConfiguration();
-    //XMLDocumentFilter removeNSAttrsFilter = new RemoveNSAttrsFilter();
     XMLDocumentFilter elementValidityCheckFilter = new ElementValidityCheckFilter(errorHandler);
-    //XMLDocumentFilter[] filters = { removeNSAttrsFilter,  elementValidityCheckFilter};
     XMLDocumentFilter[] filters = { elementValidityCheckFilter};
 
     config.setErrorHandler(this.errorHandler);
@@ -159,29 +158,6 @@ public class HtmlDomParserContext extends XmlDomParserContext
       }
     }
     return null;
-  }
-
-  /**
-   * Filter to strip out attributes that pertain to XML namespaces.
-   */
-  public static class RemoveNSAttrsFilter extends DefaultFilter
-  {
-    @Override
-    public void
-    startElement(QName element, XMLAttributes attrs,
-                 Augmentations augs) throws XNIException
-    {
-      int i;
-      for (i = 0; i < attrs.getLength(); ++i) {
-        if (isNamespace(attrs.getQName(i))) {
-          attrs.removeAttributeAt(i);
-          --i;
-        }
-      }
-
-      element.uri = null;
-      super.startElement(element, attrs, augs);
-    }
   }
 
   public static class ElementValidityCheckFilter extends DefaultFilter

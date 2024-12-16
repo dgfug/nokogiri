@@ -19,7 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "util.h"
-#include "gumbo.h"
+#include "nokogiri_gumbo.h"
 
 void* gumbo_alloc(size_t size) {
   void* ptr = malloc(size);
@@ -63,6 +63,4 @@ void gumbo_debug(const char* format, ...) {
   va_end(args);
   fflush(stdout);
 }
-#else
-void gumbo_debug(const char* UNUSED_ARG(format), ...) {}
 #endif
